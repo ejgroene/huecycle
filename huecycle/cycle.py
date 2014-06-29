@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import requests, json, time, datetime, math, ephem, sys
-from misc import autostart
+import requests, json, time, datetime, math, ephem, sys, rfc822
+from misc import autostart, time822
 from config import WUNDERGROUND_API_KEY, LOCAL_HUE_API
 
 def phase_factor(phase, boost=2.):
@@ -13,11 +13,9 @@ def color_mired(factor, upperbound=153):
 @autostart
 def lamp_group(url):
     while True:
-        args = yield
-        r = requests.put(url, json.dumps(args))
-        result = r.json
-        if not u"success" in result[0]:
-            print result
+        ct, bri, on = yield
+        result = requests.put(url, json.dumps({"ct": ct, "bri": bri, "on": on})).json
+        print result if not "success" in result[0] else "%d; %d;" % (1000000/ct, bri),
 
 def weather(url):
     CONDITIONS = {  # 1.0 => Tmax = 4000 K,  0.0 => Tmax = 6500 K
@@ -32,18 +30,22 @@ def weather(url):
         "heavy drizzle": 0.0,
         "rain": 0.0,
     }
+    last_observation = None
+    last_observation_time = delta_t = 0.
     while True:
-        r = requests.get(url)
-        data = r.json
-        weather = data["current_observation"]["weather"].lower()
-        print weather, ";", CONDITIONS.get(weather),
-        yield CONDITIONS.get(weather)
+        now = time.time()
+        if now > last_observation_time + delta_t:
+        	last_observation = requests.get(url).json["current_observation"]
+        	last_observation_time = time822(last_observation["observation_time_rfc822"])
+		delta_t = (delta_t + 2 * (now - last_observation_time)) / 2.
+                print " (got weather: %s delta t: %d)" % (last_observation["weather"].lower(), delta_t),
+        yield CONDITIONS.get(last_observation["weather"].lower())
 
 def sunphase(lat, lon, horizon, boost):
-    ede = ephem.Observer()
-    ede.horizon = str(horizon) # include civil twilight
-    ede.lat, ede.lon = str(lat), str(lon)
     while True:
+        ede = ephem.Observer()
+        ede.horizon = str(horizon) # include civil twilight
+        ede.lat, ede.lon = str(lat), str(lon)
         t_now = ede.date
         ede.date = datetime.date.today() # set to only date, so next_* will always be today
         t_rise = ede.next_rising(ephem.Sun())
@@ -64,21 +66,20 @@ def step(group, weather, day, sun):
     dpf = day.next()
     wpf = 0.
     on = 0. < dpf <= 1. or 0. < spf <= 1.
-    if on: # avoid wunderground rate limit of 500/day
-        wpf = weather.next()
+    wpf = weather.next()
     # if drizzle: hue=31000, sat=255
     color_temp = color_mired(spf, upperbound=(250-153)*wpf+153) # 250 mirek = 4000 K
-    color_temp_in_K = 1000000 / color_temp
     brightness = int(max(0., 255. * dpf))
-    print ";", datetime.datetime.now().strftime("%H:%M:%S"), ";", color_temp_in_K, ";", brightness, ";"
-    sys.stdout.flush()
-    group.send({"ct": color_temp, "bri": brightness, "on": on})
+    print ";", datetime.datetime.now().strftime("%H:%M:%S"), ";",
+    group.send((color_temp, brightness, on))
 
 if __name__ == "__main__":
     group1 = lamp_group(LOCAL_HUE_API + "groups/0/action")
     weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
     day1 = dayphase(7.5, 22.5, 3.0)
-    sun1 = sunphase(-6, 52.053055, 5.638889, 1.0)
+    sun1 = sunphase(52.053055, 5.638889, -6.0, 1.0)
     while True:
         step(group1, weather1, day1, sun1)
-        time.sleep(180) # avoid wunderground rate limit of 500/day
+        time.sleep(1)
+        print
+        sys.stdout.flush()

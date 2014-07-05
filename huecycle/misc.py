@@ -9,3 +9,13 @@ def autostart(f):
 
 def time822(s):
     return rfc822.mktime_tz(rfc822.parsedate_tz(s))
+
+@autostart
+def average():
+    v = yield
+    n = 1
+    while True:
+        v += yield v / n
+        n += 1
+
+        

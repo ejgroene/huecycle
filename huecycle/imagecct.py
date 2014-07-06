@@ -5,10 +5,12 @@ from subprocess import Popen, PIPE
 from StringIO import StringIO
 from time import sleep
 
-def capture_image():
-    p = Popen(["fswebcam", "-"], stdout=PIPE)
-    data, errs = p.communicate()
-    rgb = Image.open(StringIO(data))
+def capture_image(f=None):
+    if not f:
+        p = Popen(["fswebcam", "-"], stdout=PIPE, stderr=PIPE)
+        data, errs = p.communicate()
+        f = StringIO(data)
+    rgb = Image.open(f)
     print "Captured:", rgb
     return rgb
 
@@ -48,7 +50,7 @@ def convert_to_xyz(rgb):
 # use http://www.brucelindbloom.com/index.html?Eqn_XYZ_to_T.html to find CCT
 
 def analyze_sky():
-    rgb = capture_image()
+    rgb = capture_image(argv[1] if len(argv) > 1 else None)
     xyz = convert_to_xyz(rgb)
     stats = ImageStat.Stat(xyz)
     min_y = stats.extrema[1][1] - stats.stddev[1] / 2
@@ -66,4 +68,4 @@ def analyze_sky():
 
 while True:
     analyze_sky()
-    sleep(600)
+    sleep(1200)

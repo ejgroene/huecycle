@@ -2,6 +2,7 @@
 import requests, json, time, datetime, math, ephem, sys, rfc822
 from misc import autostart, time822, average
 from config import WUNDERGROUND_API_KEY, LOCAL_HUE_API
+from traceback import print_exc
 
 def phase_factor(phase, boost=2.):
     angle = math.sin(math.pi * phase)
@@ -12,8 +13,11 @@ def color_mired(factor, upperbound=153):
 
 @autostart
 def lamp_group(url):
+    ct, bri = 500, 0
     while True:
-        ct, bri, on = yield
+        ct_target, bri_target, on = yield
+        ct += (ct_target - ct) / 10
+        bri += (bri_target - bri) / 10
         result = requests.put(url, json.dumps({"ct": ct, "bri": bri, "on": on})).json
         if not "success" in result[0]:
             print result[0]
@@ -79,8 +83,8 @@ def loop(group, weather, day, sun):
                 last_ct = color_temp
                 print datetime.datetime.now().strftime("%H:%M:%S"), "; %dK; %.1f%%" % (1000000/color_temp, brightness/2.55)
             group.send((color_temp, brightness, on))
-        except Exception, e:
-            print e
+        except:
+            print_exc()
         time.sleep(1)
         sys.stdout.flush()
     yield

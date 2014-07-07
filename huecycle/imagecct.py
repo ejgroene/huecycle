@@ -53,7 +53,7 @@ def analyze_sky():
     rgb = capture_image(argv[1] if len(argv) > 1 else None)
     xyz = convert_to_xyz(rgb)
     stats = ImageStat.Stat(xyz)
-    min_y = stats.extrema[1][1] - stats.stddev[1] / 2
+    min_y = stats.extrema[1][1] - stats.stddev[1]
     sum_t = 0
     i = 0
     for p in (p for p in xyz.getdata() if p[1] > min_y):

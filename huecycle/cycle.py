@@ -18,6 +18,7 @@ def lamp_group(url):
         ct_target, bri_target, on = yield
         ct += (ct_target - ct) / 10
         bri += (bri_target - bri) / 10
+        #result  = requests.put(url, json.dumps({"hue": 31000, "sat": 255, "on": on})).json
         result = requests.put(url, json.dumps({"ct": ct, "bri": bri, "on": on})).json
         if not "success" in result[0]:
             print result[0]
@@ -34,7 +35,7 @@ def weather(url):
         "drizzle": 0.0,
         "heavy drizzle": 0.0,
         "rain": 0.0,
-        "light rain showers": 1.0
+        "light rain showers": 0.0
     }
     last_observation = None
     last_observation_time = delta_t = 0.
@@ -75,7 +76,6 @@ def loop(group, weather, day, sun):
             wpf = 0.
             on = 0. < dpf <= 1. or 0. < spf <= 1.
             wpf = weather.next()
-            # if drizzle: hue=31000, sat=255
             color_temp = color_mired(spf, upperbound=(250-153)*wpf+153) # 250 mirek = 4000 K
             brightness = int(max(0., 255. * dpf))
             if color_temp != last_ct or brightness != last_bri:

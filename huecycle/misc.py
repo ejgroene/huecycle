@@ -18,4 +18,16 @@ def average():
         v += yield v / n
         n += 1
 
-        
+def gtest(f):
+    def t():
+        g = f()
+        g.next() # setup
+        g.next() # test
+        try:
+            g.next() # tear down
+        except StopIteration:
+            pass
+        print f.__name__, "Ok"
+    return t
+
+

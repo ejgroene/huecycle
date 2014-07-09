@@ -1,4 +1,6 @@
 import rfc822
+from requests import put
+from json import dumps
 
 def autostart(f):
     def g(*args, **kwargs):
@@ -18,16 +20,32 @@ def average():
         v += yield v / n
         n += 1
 
-def gtest(f):
-    def t():
-        g = f()
-        g.next() # setup
-        g.next() # test
-        try:
-            g.next() # tear down
-        except StopIteration:
-            pass
-        print f.__name__, "Ok"
-    return t
+def autotest(f):
+    print f.__module__, f.__name__,
+    f()
+    print "Ok."
 
+def interpolate(lo, hi, x, lo2, hi2):
+    return lo2 + (float(x) - lo) * (hi2 - lo2) / (hi - lo)
+
+@autostart
+def lamp(url):
+    while True:
+        kwargs = yield
+        r = put(url, dumps(kwargs)).json
+        if not "success" in r[0]:
+            if r[0]["error"]["type"] == 201:  # lamps are off
+                continue
+            print r[0], kwargs
+
+@autostart
+def attenuator(light):
+    ct, bri = 500, 0
+    while True:
+        args = yield
+        if "ct" in args:
+            args["ct"] = ct = ct + (args["ct"] - ct) / 10
+        if "bri" in args:
+            args["bri"] = bri = bri + (args["bri"] - bri) / 10
+        light.send(args)
 

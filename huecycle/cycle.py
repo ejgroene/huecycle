@@ -1,41 +1,29 @@
 #!/usr/bin/env python
 import requests, json, time, datetime, math, ephem, sys, rfc822
-from misc import autostart, time822, average
+from misc import autostart, time822, average, lamp, attenuator, interpolate
 from config import WUNDERGROUND_API_KEY, LOCAL_HUE_API
 from traceback import print_exc
+from extended_cct import extend_cct
+from dayphase import dayphase
 
 def phase_factor(phase, boost=2.):
     angle = math.sin(math.pi * phase)
     return (1 - math.exp(-boost * angle)) / (1 - math.exp(-boost))
 
-def color_mired(factor, upperbound=153):
-    return int((1. - factor) * (500 - upperbound) + upperbound) # convert to Mirek (500/MK=2000K - 153/MK=6500K)
-
-@autostart
-def lamp_group(url):
-    ct, bri = 500, 0
-    while True:
-        ct_target, bri_target, on = yield
-        ct += (ct_target - ct) / 10
-        bri += (bri_target - bri) / 10
-        #result  = requests.put(url, json.dumps({"hue": 31000, "sat": 255, "on": on})).json
-        result = requests.put(url, json.dumps({"ct": ct, "bri": bri, "on": on})).json
-        if not "success" in result[0]:
-            print result[0]
-
 def weather(url):
     CONDITIONS = {  # 1.0 => Tmax = 4000 K,  0.0 => Tmax = 6500 K
-        "scattered clouds": 1.0,
-        "partly cloudy": 0.5,
+        "clear": 0.0,
+        "scattered clouds": 0.0,
+        "partly cloudy": 0.25,
         "mostly cloudy": 0.5,
-        "light rain": 0.0,
-        "patches of fog": 0.0,
-        "clear": 1.0,
-        "overcast": 0.0,
-        "drizzle": 0.0,
-        "heavy drizzle": 0.0,
-        "rain": 0.0,
-        "light rain showers": 0.0
+        "patches of fog": 0.75,
+        "light drizzle": 1.0,
+        "drizzle": 1.0,
+        "heavy drizzle": 1.0,
+        "light rain": 1.0,
+        "light rain showers": 1.0,
+        "rain": 1.0,
+        "overcast": 1.0,
     }
     last_observation = None
     last_observation_time = delta_t = 0.
@@ -61,38 +49,42 @@ def sunphase(lat, lon, horizon, boost):
         phase = (t_now + 0. - t_rise + 0.) / (t_set + 0. - t_rise + 0.)
         yield phase_factor(phase, boost)
 
-def dayphase(start, end, boost):
-    while True:
-        now = datetime.datetime.now()
-        phase = ((now.hour + now.minute/60.) - start) / (end - start)
-        yield phase_factor(phase, boost=boost)
-
-def loop(group, weather, day, sun):
+def loop(light, weather, day, sun):
     last_bri = last_ct = 0
     while True:
         try:
             spf = sun.next()
             dpf = day.next()
-            wpf = 0.
-            on = 0. < dpf <= 1. or 0. < spf <= 1.
             wpf = weather.next()
-            color_temp = color_mired(spf, upperbound=(250-153)*wpf+153) # 250 mirek = 4000 K
-            brightness = int(max(0., 255. * dpf))
+            if dpf > 0.:    # day
+                if spf > 0.:    # summer
+                    color_temp = int(interpolate(0., 1., spf, 2000, 5500 + wpf * 1000))
+                else:           # winter
+                    raise Exception("NYI")
+            else:           # night
+                if spf > 0.:    # summer
+                    color_temp = interpolate(0., 1., -dpf, 1000, 10000)
+                else:           # winter
+                    raise Exception("NYI")
+            brightness = int(max(0, 255. * dpf)) # always hard linked to day/night
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness
                 last_ct = color_temp
-                print datetime.datetime.now().strftime("%H:%M:%S"), "; %dK; %.1f%%" % (1000000/color_temp, brightness/2.55)
-            group.send((color_temp, brightness, on))
+                print dpf, datetime.datetime.now().strftime("%H:%M:%S"), "; %dK; %.1f%%" % (color_temp, brightness/2.55)
+            light.send(dict(ct=color_temp, bri=brightness))
         except:
             print_exc()
-        time.sleep(1)
         sys.stdout.flush()
+        time.sleep(1.0)
     yield
 
 
 if __name__ == "__main__":
-    group1 = lamp_group(LOCAL_HUE_API + "groups/0/action")
+    group1 = lamp(LOCAL_HUE_API + "groups/0/action")
+    light1 = extend_cct(attenuator(group1))
+    #lamp1 = lamp(LOCAL_HUE_API + "lights/1/state")
+    #light1 = extend_cct(lamp1)
     weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
-    day1 = dayphase(7.5, 22.5, 3.0)
+    day1 = dayphase(7.0, 22.5, 3.0)
     sun1 = sunphase(52.053055, 5.638889, -6.0, 2.0)
-    loop(group1, weather1, day1, sun1).next()
+    loop(light1, weather1, day1, sun1).next()

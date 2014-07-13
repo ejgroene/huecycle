@@ -21,9 +21,9 @@ def average():
         n += 1
 
 def autotest(f):
-    print f.__module__, f.__name__,
+    print "%s.%s" % (f.__module__, f.__name__),
     f()
-    print "Ok."
+    print " Ok."
 
 def interpolate(lo, hi, x, lo2, hi2):
     return lo2 + (float(x) - lo) * (hi2 - lo2) / (hi - lo)

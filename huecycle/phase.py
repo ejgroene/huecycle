@@ -35,17 +35,17 @@ def unity():
 
 @autotest
 def CurrentTimeWhenNoneGiven():
-    p = phase(8, 22, unity(), 1000, 9000)
+    p = phase(0, 24, unity(), 1000, 9000)
     x = p.next()
     assert 1000 < x < 9000, x
 
 @autotest
 def AcceptDateTime():
     p = phase(time(8), time(22), unity(), 1000, 9000)
-    x = p.next()
+    x = p.send(time(9))
     assert 1000 < x < 9000, x
     p = phase(datetime(2014,6,22,8), datetime(2014,6,22,22), unity(), 1000, 9000)
-    x = p.next()
+    x = p.send(time(9))
     assert 1000 < x < 9000, x
     
 @autotest

@@ -5,7 +5,8 @@ MIREK = 1000000
 @autostart
 def extend_cct(lamp):
     """ Extends Hue's CT range by simulating very low or high CT's with the nearest hue and saturation.
-        Color Temperatures are in Kelvin and translated to hue/sat or to ct in Mired."""
+        Color Temperatures are in Kelvin and translated to hue/sat or to ct in Mired.
+        See http://developers.meethue.com/coreconcepts.html for the color space, gammut and locus."""
     HUE_AT_1000K = 0     # follow the Planckian locus as close as possible towards the lower-right
     SAT_AT_1000K = 255
     HUE_AT_1500K = 10500 # roughly where the Plackian locus exits Hue's gamut (y=0.4)
@@ -14,7 +15,7 @@ def extend_cct(lamp):
     SAT_AT_2000K = 225
     HUE_AT_6500K = 34534 # set lamp to ct=1000000/6500, wait and get hue and sat from lamp
     SAT_AT_6500K = 240
-    HUE_AT_10000K = 46920 # lower left corner of gamut, see http://developers.meethue.com/coreconcepts.html
+    HUE_AT_10000K = 46920 # lower left corner of gamut.
     SAT_AT_10000K = 255
     while True:
         args = yield

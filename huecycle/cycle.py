@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 from sys import stdout
 from time import sleep
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from misc import autostart, lamp, attenuator
-from config import WUNDERGROUND_API_KEY, LOCAL_HUE_API
+from config import LOCAL_HUE_API
 from extended_cct import extend_cct, MIREK
 from sunphase import rise_and_set
-from phase import phase, unity as linear
-from math import sin, pi, exp
+from phase import phase, linear, sinus, charge
 
 """
 We use MIREK instead of Kelvin as unit for color temperature because:
@@ -26,38 +25,23 @@ CCT_OVERCAST_SKY = MIREK/6000
 CCT_RED_SUN = MIREK/1000
 CCT_DEEP_NIGHT = MIREK/10000
 
-@autostart
-def sinus(next=linear()):
-    x = 0.
-    while True:
-        x = yield next.send(sin(x * pi))
-
-@autostart
-def constant(v):
-    while True:
-        yield v
-
-@autostart
-def exponent(p):
-    v = 0.
-    c = 1. - exp(-p)
-    while True:
-        v = yield (1. - exp(-p * v)) / c
-
 def get_ct_phase(sun, t_wake, t_sleep, t_now):
     t_rise, t_set = sun.next()
     t_day_begin, t_day_end = max(t_rise, t_wake), min(t_set, t_sleep)
     t_night_begin, t_night_end = max(t_set, t_sleep), min(t_rise, t_wake)
+    #if t_night_begin + t_day_end < timedelta(hours=1):
+    #    t_night_begin = t_day_end + timedelta(hours=1)
+    #if t_day_begin - t_night_end < timedelta(hours=1):
+    #    t_night_end = t_day_begin - timedelta(hours=1)
+    print t_night_end, t_day_begin, t_day_end, t_night_begin
 
     if t_day_begin <= t_now < t_day_end:
         print " * day * "
-        return phase(t_day_begin, t_day_end, sinus(), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
+        return phase(t_day_begin, t_day_end, sinus(charge(2.)), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
     elif t_night_end <= t_now < t_day_begin:
-        # what if this phase is very short, say a few minutes?
         print " * early morning * "
         return phase(t_night_end, t_day_begin, linear(), CCT_RED_SUN, CCT_SUN_RISE)
     elif t_day_end <= t_now < t_night_begin:
-        # what if this phase is very short, say a few minutes?
         print " * late evening * "
         return phase(t_day_end, t_night_begin, linear(), CCT_SUN_RISE, CCT_RED_SUN)
     elif t_night_begin <= t_now < time.max or time.min <= t_now < t_night_end:
@@ -75,7 +59,7 @@ def loop(light):
         ct_phase = get_ct_phase(sun, t_wake, t_sleep, t_now)
 
         if t_wake < t_now < t_sleep:
-            bri_cycle = phase(t_wake, t_sleep, sinus(exponent(3.)), 0, 255) # plus exp (refactor)
+            bri_cycle = phase(t_wake, t_sleep, sinus(charge(3.)), 0, 255)
         else:
             bri_cycle = constant(0)
 

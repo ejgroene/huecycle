@@ -2,11 +2,11 @@
 from sys import stdout
 from time import sleep
 from datetime import datetime, time, timedelta
-from misc import autostart, lamp, attenuator
+from misc import autostart, lamp, attenuator, hours
 from config import LOCAL_HUE_API
 from extended_cct import extend_cct, MIREK
 from sunphase import rise_and_set
-from phase import phase, linear, sinus, charge
+from phase import phase, linear, sinus, charge, constant
 
 """
 We use MIREK instead of Kelvin as unit for color temperature because:
@@ -29,10 +29,10 @@ def get_ct_phase(sun, t_wake, t_sleep, t_now):
     t_rise, t_set = sun.next()
     t_day_begin, t_day_end = max(t_rise, t_wake), min(t_set, t_sleep)
     t_night_begin, t_night_end = max(t_set, t_sleep), min(t_rise, t_wake)
-    #if t_night_begin + t_day_end < timedelta(hours=1):
-    #    t_night_begin = t_day_end + timedelta(hours=1)
-    #if t_day_begin - t_night_end < timedelta(hours=1):
-    #    t_night_end = t_day_begin - timedelta(hours=1)
+    if hours(t_night_begin) - hours(t_day_end) < 1.:
+        t_night_begin = t_day_end.replace(hour=t_day_end.hour + 1)
+    if hours(t_day_begin) - hours(t_night_end) < 1.:
+        t_night_end = t_day_begin.replace(hour=t_day_begin.hour - 1)
     print t_night_end, t_day_begin, t_day_end, t_night_begin
 
     if t_day_begin <= t_now < t_day_end:

@@ -49,3 +49,19 @@ def attenuator(light):
             args["bri"] = bri = bri + (args["bri"] - bri) / 10
         light.send(args)
 
+def hours(t):
+    return t.hour + t.minute / 60. 
+
+@autotest
+def TimeDiff():
+    from datetime import time
+    td = hours(time(4)) - hours(time(3))
+    assert td == 1., td
+    td = hours(time(5)) - hours(time(3))
+    assert td == 2.0, td
+    td = hours(time(4,15)) - hours(time(3))
+    assert td == 1.25, td
+    td = hours(time(4)) - hours(time(3,15))
+    assert td == 0.75, td
+    td = hours(time(3)) - hours(time(3,15))
+    assert td == -0.25, td

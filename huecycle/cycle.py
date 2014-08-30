@@ -26,62 +26,44 @@ CCT_OVERCAST_SKY = MIREK/6000
 CCT_RED_SUN = MIREK/1000
 CCT_DEEP_NIGHT = MIREK/10000
 
-class Cycle(object):
-    def __init__(self, lat, lon, hor, t_wake, t_sleep):
-        self.sun = rise_and_set(lat, lon, hor)
-        self.t_wake = t_wake
-        self.t_sleep = t_sleep
+def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
+    t_dawn_end = min(t_wake, t_rise)
+    t_dusk_begin = max(t_sleep, t_set)
+    t_dawn_begin = t_dawn_end.replace(hour=t_dawn_end.hour - 1)
+    t_dusk_end = t_dusk_begin.replace(hour=t_dusk_begin.hour + 1)
+    if t_rise <= t < t_set:
+        print " * Just follow the sun's color."
+        return phase(t_rise, t_set, sinus(charge(2.)), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
+    if t_wake <= t < t_rise or t_set <= t < t_sleep:
+        print " * Awake but no sun."
+        return constant(CTT_SUN_SET)
+    if t_dawn_begin <= t < t_dawn_end:
+        print " * Morning twilight."
+        return phase(t_dawn_begin, t_dawn_end, linear(), CCT_RED_SUN, CCT_SUN_RISE)
+    if t_dusk_begin <= t < t_dusk_end:
+        print " * Evening twilight."
+        return phase(t_dusk_begin, t_dusk_end, linear(), CCT_SUN_SET, CCT_RED_SUN)
+    if t_dusk_end <= t < time.max or time.min <= t < t_dawn_begin:
+        print " * Night."
+        return phase(t_dusk_end, t_dawn_begin, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)
+    raise Exception("Cannot match cycle: %s" % t)
 
-    def calculate(self, t_now):
-        self.t_now = t_now
-        self.t_rise, self.t_set = self.sun.next()
-        self.t_day_begin, self.t_day_end = max(self.t_rise, self.t_wake), min(self.t_set, self.t_sleep)
-        self.t_night_begin, self.t_night_end = max(self.t_set, self.t_sleep), min(self.t_rise, self.t_wake)
-        if hours(self.t_night_begin) - hours(self.t_day_end) < 1.:
-            self.t_night_begin = self.t_day_end.replace(hour=self.t_day_end.hour + 1)
-        if hours(self.t_day_begin) - hours(self.t_night_end) < 1.:
-            self.t_night_end = self.t_day_begin.replace(hour=self.t_day_begin.hour - 1)
-
-    def ct_phase(self):
-        if self.t_day_begin <= self.t_now < self.t_day_end:
-            print " * day * ", self.t_day_begin, self.t_day_end
-            return phase(self.t_day_begin, self.t_day_end, sinus(charge(2.)), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
-        elif self.t_night_end <= self.t_now < self.t_day_begin:
-            print " * morning * ", self.t_night_end, self.t_day_begin
-            return phase(self.t_night_end, self.t_day_begin, linear(), CCT_RED_SUN, CCT_SUN_RISE)
-        elif self.t_day_end <= self.t_now < self.t_night_begin:
-            print " * evening * ", self.t_day_end, self.t_night_begin
-            # on 21 dec, t_day_end is 16h29. It will start to become red already! What about it???
-            return phase(self.t_day_end, self.t_night_begin, linear(), CCT_SUN_RISE, CCT_RED_SUN)
-        elif self.t_night_begin <= self.t_now < time.max or time.min <= self.t_now < self.t_night_end:
-            print " * night * ", self.t_night_begin, self.t_night_end
-            return phase(self.t_night_begin, self.t_night_end, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)
-        else:
-            raise Exception("Cannot match cycle: %s" % self.t_now)
-
-    def bri_phase(self):
-        if self.t_wake < self.t_now < self.t_sleep:
-            return phase(self.t_wake, self.t_sleep, sinus(charge(3.)), 0, 255)
-        else:
-            return constant(0)
 
 def loop(light):
     last_bri = last_ct = 0
-    cycle = Cycle(52.053055, 5.638889, -6.0, time(7,15), time(22,15))
+    sun = rise_and_set(52.053055, 5.638889, -6.0)
+    t_wake = time(7,15)
+    t_sleep = time(22,15)
     while True:
-        cycle.calculate(datetime.now().time())
-        ct_phase = cycle.ct_phase()
-        bri_phase = cycle.bri_phase()
+        t_rise, t_set = sun.next()
+        ct_phase = get_ct_phase(t_wake, t_sleep, t_rise, t_set, datetime.now().time())
+        bri_phase = phase(t_wake, t_sleep, sinus(charge(3.)), 0, 255)
         for color_temp, brightness in izip(ct_phase, bri_phase):
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness
                 last_ct = color_temp
                 print "%s; %dK; %.1f%%" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55)
-            try:
                 light.send(dict(ct=color_temp, bri=brightness, on=True))
-            except ConnectionError, e:
-                print e
-                sleep(60)
             stdout.flush()
             sleep(1.0)
         sleep(1.0)

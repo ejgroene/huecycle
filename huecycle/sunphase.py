@@ -67,6 +67,7 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
     if t_dawn_begin <= t < t_dawn_end:
         return phase(t_dawn_begin, t_dawn_end, linear(), CCT_RED_SUN, CCT_SUN_RISE)
     if t_dusk_begin <= t < t_dusk_end:
+        print "DUSK", t_dusk_begin, t_dusk_end
         return phase(t_dusk_begin, t_dusk_end, linear(), CCT_SUN_SET, CCT_RED_SUN)
     if t_dusk_end <= t < time.max or time.min <= t < t_dawn_begin:
         return phase(t_dusk_end, t_dawn_begin, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)
@@ -75,6 +76,7 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
 
 def summer_phase(t):
     return get_ct_phase(time(7), time(21), time(6), time(22), t)
+
 @autotest
 def summer_day():
     ct = summer_phase(time(06,00)).send(time(6,00))

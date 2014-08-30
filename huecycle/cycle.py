@@ -6,7 +6,7 @@ from datetime import datetime, time
 
 def loop(light):
     from itertools import izip
-    from phase import phase, sinus, charge
+    from phase import phase, sinus, charge, constant
     from sunphase import get_ct_phase, rise_and_set, MIREK
     last_bri = last_ct = 0
     sun = rise_and_set(52.053055, 5.638889, -6.0)
@@ -14,8 +14,12 @@ def loop(light):
     t_sleep = time(22,15)
     while True:
         t_rise, t_set = sun.next()
-        ct_phase = get_ct_phase(t_wake, t_sleep, t_rise, t_set, datetime.now().time())
-        bri_phase = phase(t_wake, t_sleep, sinus(charge(3.)), 0, 255)
+        t_now = datetime.now().time()
+        ct_phase = get_ct_phase(t_wake, t_sleep, t_rise, t_set, t_now)
+        if t_wake <= t_now < t_sleep:
+            bri_phase = phase(t_wake, t_sleep, sinus(charge(3.)), 0, 255)
+        else:
+            bri_phase = constant(0)
         for color_temp, brightness in izip(ct_phase, bri_phase):
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness
@@ -35,5 +39,10 @@ if __name__ == "__main__":
     #lamp = lamp(LOCAL_HUE_API + "lights/1/state")
     lights = extend_cct(attenuator(lamp))
     #weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
-    loop(lights)
+    try:
+        loop(lights)
+    except:
+        from traceback import print_exc
+        print_exc()
+        sleep(60)
 

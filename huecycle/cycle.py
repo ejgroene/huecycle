@@ -19,7 +19,7 @@ def loop(light):
         if t_wake <= t_now < t_sleep:
             bri_phase = phase(t_wake, t_sleep, sinus(charge(3.)), 0, 255)
         else:
-            bri_phase = constant(0)
+            bri_phase = phase(t_sleep, t_wake, constant(0), 0, 0)
         for color_temp, brightness in izip(ct_phase, bri_phase):
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness

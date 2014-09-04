@@ -35,14 +35,14 @@ if __name__ == "__main__":
     from misc import lamp, attenuator
     from config import LOCAL_HUE_API
     from extended_cct import extend_cct
-    lamp = lamp(LOCAL_HUE_API + "groups/0/action")
-    #lamp = lamp(LOCAL_HUE_API + "lights/1/state")
-    lights = extend_cct(attenuator(lamp))
-    #weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
-    try:
-        loop(lights)
-    except:
-        from traceback import print_exc
-        print_exc()
-        sleep(60)
-
+    while True:
+        lamp = lamp(LOCAL_HUE_API + "groups/0/action")
+        #lamp = lamp(LOCAL_HUE_API + "lights/1/state")
+        lights = extend_cct(attenuator(lamp))
+        #weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
+        try:
+            loop(lights)
+        except:
+            from traceback import print_exc
+            print_exc()
+            sleep(60)

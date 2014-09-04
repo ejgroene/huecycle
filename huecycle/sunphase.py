@@ -1,7 +1,7 @@
 from misc import autotest, autostart, hours
 from datetime import datetime, date, time
 from ephem import Observer, Sun, Moon, localtime
-from phase import phase, sinus, charge, constant, linear
+from phase import phase, sinus, charge, linear
 
 @autostart
 def rise_and_set(lat, lon, horizon=0):
@@ -62,12 +62,13 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
     t_dusk_end = t_dusk_begin.replace(hour=t_dusk_begin.hour + 1)
     if t_rise <= t < t_set:
         return phase(t_rise, t_set, sinus(charge(2.)), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
-    if t_wake <= t < t_rise or t_set <= t < t_sleep:
-        return constant(CCT_SUN_SET)
+    if t_wake <= t < t_rise:
+        return phase(t_wake, t_rise, linear(), CCT_SUN_RISE, CCT_SUN_RISE)
+    if t_set <= t < t_sleep:
+        return phase(t_set, t_sleep, linear(), CCT_SUN_SET, CCT_SUN_SET)
     if t_dawn_begin <= t < t_dawn_end:
         return phase(t_dawn_begin, t_dawn_end, linear(), CCT_RED_SUN, CCT_SUN_RISE)
     if t_dusk_begin <= t < t_dusk_end:
-        print "DUSK", t_dusk_begin, t_dusk_end
         return phase(t_dusk_begin, t_dusk_end, linear(), CCT_SUN_SET, CCT_RED_SUN)
     if t_dusk_end <= t < time.max or time.min <= t < t_dawn_begin:
         return phase(t_dusk_end, t_dawn_begin, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)

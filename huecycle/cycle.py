@@ -2,9 +2,10 @@
 from sys import stdout
 from time import sleep
 from datetime import datetime, time
+from tap import tap
 
 
-def loop(light):
+def loop(light, tap):
     from itertools import izip
     from phase import phase, sinus, charge, constant
     from sunphase import get_ct_phase, rise_and_set, MIREK
@@ -25,7 +26,9 @@ def loop(light):
                 last_bri = brightness
                 last_ct = color_temp
                 print "%s; %dK; %.1f%%" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55)
-            light.send(dict(ct=color_temp, bri=brightness, on=True))
+            s = tap.next()
+            if s == 17: # button 2 is auto
+                light.send(dict(ct=color_temp, bri=brightness, on=True))
             stdout.flush()
             sleep(1.0)
         sleep(1.0)
@@ -36,12 +39,12 @@ if __name__ == "__main__":
     from config import LOCAL_HUE_API
     from extended_cct import extend_cct
     while True:
-        lamp = lamp(LOCAL_HUE_API + "groups/0/action")
-        #lamp = lamp(LOCAL_HUE_API + "lights/1/state")
-        lights = extend_cct(attenuator(lamp))
+        tap1 = tap(LOCAL_HUE_API, 2)
+        #lights1 = extend_cct(lamp(LOCAL_HUE_API + "lights/1/state"))
+        lights1 = extend_cct( lamp(LOCAL_HUE_API + "groups/0/action"))
         #weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
         try:
-            loop(lights)
+            loop(lights1, tap1)
         except:
             from traceback import print_exc
             print_exc()

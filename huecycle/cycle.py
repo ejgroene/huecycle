@@ -22,15 +22,15 @@ def loop(light, tap):
         else:
             bri_phase = phase(t_sleep, t_wake, constant(0), 0, 0)
         for color_temp, brightness in izip(ct_phase, bri_phase):
+            s = tap.next()
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness
                 last_ct = color_temp
-                print "%s; %dK; %.1f%%" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55)
-            s = tap.next()
+                print "%s; %dK; %.1f%% tap=%d" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55, s)
             if s == 17: # button 2 is auto
                 light.send(dict(ct=color_temp, bri=brightness, on=True))
             stdout.flush()
-            sleep(1.0)
+            sleep(2.0)
         sleep(1.0)
 
 
@@ -48,4 +48,4 @@ if __name__ == "__main__":
         except:
             from traceback import print_exc
             print_exc()
-            sleep(60)
+            sleep(5)

@@ -29,7 +29,7 @@ def loop(light, tap, bri_phase_map):
                 last_ct = color_temp
                 if s == 17: # button 2 is auto
                     light.send(dict(ct=color_temp, bri=brightness, on=True))
-                    print "%s; %dK; %.1f%% tap=%d" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55, s)
+                    print "\n%s; %dK; %.1f%% tap=%d" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55, s),
             stdout.flush()
             sleep(2.0)
         sleep(1.0)

@@ -4,8 +4,8 @@ from config import LOCAL_HUE_API
 
 def tap(url, n):
     while True:
-        r = get(url + "/sensors/%d" % n).json
-        yield r["sensors"]["2"]["state"]["buttonevent"]
+        r = get(url + "sensors/%d" % n).json
+        yield r["state"]["buttonevent"]
 
 @autotest
 def get_state():

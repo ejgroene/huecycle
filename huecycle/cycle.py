@@ -43,8 +43,8 @@ if __name__ == "__main__":
     bri_phase_map = sinus(charge(BRI_SINUS_CHARGE))
     while True:
         tap1 = tap(LOCAL_HUE_API, 2)
-        #lights1 = extend_cct(lamp(LOCAL_HUE_API + "lights/1/state"))
-        lights1 = extend_cct( lamp(LOCAL_HUE_API + "groups/0/action"))
+        lights1 = extend_cct(lamp(LOCAL_HUE_API + "/lights/1"))
+        lights1 = extend_cct(lamp(LOCAL_HUE_API + "/groups/0"))
         #weather1 = weather("http://api.wunderground.com/api/%s/conditions/q/pws:IUTRECHT57.json" % WUNDERGROUND_API_KEY)
         try:
             loop(lights1, tap1, bri_phase_map)

@@ -1,5 +1,5 @@
 import rfc822
-from requests import put
+from requests import put, get
 from json import dumps
 
 def autostart(f):
@@ -38,13 +38,17 @@ def interpolate(lo, hi, x, lo2, hi2):
 
 @autostart
 def lamp(url):
+    postfix = "/action" if "/groups/" in url else "/state"
     while True:
         kwargs = yield
-        r = put(url, dumps(kwargs)).json
+        if not kwargs:
+            yield get(url).json["state"]
+            continue
+        r = put(url + postfix, dumps(kwargs)).json
         if not "success" in r[0]:
+            print r[0], kwargs
             if r[0]["error"]["type"] == 201:  # lamps are off
                 continue
-            print r[0], kwargs
 
 @autostart
 def attenuator(light):
@@ -73,3 +77,10 @@ def TimeDiff():
     assert td == 0.75, td
     td = hours(time(3)) - hours(time(3,15))
     assert td == -0.25, td
+
+@autotest
+def TestGetState():
+    from config import LOCAL_HUE_API
+    l = lamp(LOCAL_HUE_API + "/lights/1")
+    state = l.next()
+    assert state["on"] in (False, True), state

@@ -18,9 +18,6 @@ def rise_and_set(lat, lon, horizon=0):
         loc.date = loc.date.datetime().date() # strip time
         t_rise = loc.next_rising(sun)
         t_set = loc.next_setting(sun)
-        #t_moon_rise = loc.next_rising(moon)
-        #t_moon_set = loc.next_setting(moon)
-        #print "Moon:", t_moon_rise, t_moon_set
         date = yield localtime(t_rise).time(), localtime(t_set).time()
 
 @autotest

@@ -71,13 +71,9 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
         return phase(t_dusk_end, t_dawn_begin, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)
     raise Exception("Cannot match cycle: %s" % t)
 
-def summer_phase(t):
-    assert false
 
-@autotest
-def changes_generator():
-    ct_gen = ct_events(time(7), time(21), time(6), time(22))
-    assert ct_gen
+def summer_phase(t):
+    return get_ct_phase(time(7), time(21), time(6), time(22), t)
 
 @autotest
 def summer_day():

@@ -32,27 +32,19 @@ for rule in rules.json:
     print "deleting rule %s" % rule
     delete(LOCAL_HUE_API + "/rules/%s" % rule)
 
-r = post(LOCAL_HUE_API + "/rules",
-    dumps({
-        "name":       "Turn OFF",
-        "conditions": [dict(address="/sensors/2/state/buttonevent", operator="eq", value=str(BUTTON1)),
-                       dict(address="/sensors/2/state/lastupdated", operator="dx")],
-        "actions":    [dict(address="/lights/1/state", method="PUT", body=dict(on=False))]
-    }))
-r = post(LOCAL_HUE_API + "/rules",
-    dumps({
-        "name":       "Turn ON default",
-        "conditions": [dict(address="/sensors/2/state/buttonevent", operator="eq", value=str(BUTTON2)),
-                       dict(address="/sensors/2/state/lastupdated", operator="dx")],
-        "actions":    [dict(address="/lights/1/state", method="PUT", body=dict(on=True))]
-    }))
-r = post(LOCAL_HUE_API + "/rules",
-    dumps({
-        "name":       "Turn ON full",
-        "conditions": [dict(address="/sensors/2/state/buttonevent", operator="eq", value=str(BUTTON4)),
-                       dict(address="/sensors/2/state/lastupdated", operator="dx")],
-        "actions":    [dict(address="/lights/1/state", method="PUT", body=dict(on=True,bri=255))]
-    }))
+def create_rule(name, tapid, button, lights, **action):
+    r = post(LOCAL_HUE_API + "/rules",
+        dumps({
+            "name":       name,
+            "conditions": [dict(address="/sensors/%s/state/buttonevent" % tapid, operator="eq", value=str(button)),
+                           dict(address="/sensors/%s/state/lastupdated" % tapid, operator="dx")],
+            "actions":    [dict(address="%s/state" % lights, method="PUT", body=action)]
+        }))
+    assert r.status_code == 200, r.status_code
+
+create_rule("Turn OFF", 2, BUTTON1, "/lights/1", on=False)
+create_rule("Turn ON default", 2, BUTTON2, "/lights/1", on=True)
+create_rule("Turn ON full", 2, BUTTON4,  "/lights/1", on=True, bri=255)
 
 def loop(light, tap, bri_phase_map):
     last_bri = last_ct = 0

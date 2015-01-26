@@ -1,6 +1,8 @@
 import requests
 from json import dumps
 
+IGNORED_ERRORS = (201,)
+
 def go(method, *args, **kwargs):
     r = method(*args, **kwargs)
     assert r.status_code == 200, r
@@ -8,7 +10,7 @@ def go(method, *args, **kwargs):
     response = r.json[0]
     if "success" in response:
         return response["success"]
-    else:
+    elif response["error"]["type"] not in IGNORED_ERRORS:
         raise Exception("%(description)s (%(address)s)" % response["error"])
 
 def post(url, **kwargs):
@@ -35,4 +37,9 @@ def InvalidURL():
     except Exception as e:
         assert str(e) == "HTTPConnectionPool(host='', port=80): Max retries exceeded with url: /niks.niet", e
 
-
+@autotest
+def IgnoreDeviceOff():
+    from config import LOCAL_HUE_API
+    put(LOCAL_HUE_API + "/lights/1/state", on=False)
+    put(LOCAL_HUE_API + "/lights/1/state", bri=100)
+    put(LOCAL_HUE_API + "/lights/1/state", on=True)

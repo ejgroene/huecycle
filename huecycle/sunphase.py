@@ -1,4 +1,7 @@
-from misc import autotest, autostart, hours
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from misc import autostart, hours
+from clock import clock
 from datetime import datetime, date, time
 from ephem import Observer, Sun, Moon, localtime
 from phase import phase, sinus, charge, linear
@@ -13,26 +16,101 @@ def rise_and_set(lat, lon, horizon=0):
         loc.horizon = str(horizon)
         loc.lat = str(lat)
         loc.lon = str(lon)
-        if date:
-            loc.date = date
-        loc.date = loc.date.datetime().date() # strip time
+        loc.date = clock.now()
+        #if date:
+        #    loc.date = date
+        #loc.date = loc.date.datetime().date() # strip time
         t_rise = loc.next_rising(sun)
         t_set = loc.next_setting(sun)
-        date = yield localtime(t_rise).time(), localtime(t_set).time()
+        #date = yield localtime(t_rise), localtime(t_set)
+        yield localtime(t_rise), localtime(t_set)
+
+from prototype import object
+
+@object
+def location(self):
+    self.twilight_angle = 6.0 # civil twilight
+    def dawn_and_dusk(self):
+        if not self._dawn_and_dusk:
+            self._dawn_and_dusk = rise_and_set(self.lat, self.lon, -self.twilight_angle)
+        return self._dawn_and_dusk
+    def twilight_zones(self):
+        if not self._twilight_zones:
+            self._twilight_zones = rise_and_set(self.lat, self.lon, self.twilight_angle)
+        return self._twilight_zones
+    def next_dawn(self):
+        if not self._begin_dawns:
+            self._begin_dawns = (t_dawn for t_dawn, _ in self.dawn_and_dusk())
+        return self._begin_dawns.next()
+    def next_dawn_end(self):
+        if not self._end_dawns:
+            self._end_dawns = (t_dawn for t_dawn, _ in self.twilight_zones())
+        return self._end_dawns.next()
+    def next_dusk(self):
+        if not self._begin_dusks:
+            self._begin_dusks = (t_dusk for _, t_dusk in self.twilight_zones())
+        return self._begin_dusks.next()
+    def next_dusk_end(self):
+        if not self._end_dusks:
+            self._end_dusks = (t_dusk for _, t_dusk in self.dawn_and_dusk())
+        return self._end_dusks.next()
+    def twilights(self, time=None):
+        t_dawn_begin, t_dusk_end = self.dawn_and_dusk().send(time)
+        t_dawn_end, t_dusk_begin = self.twilight_zones().send(time)
+        return t_dawn_begin, t_dawn_end, t_dusk_begin, t_dusk_end
+
+from autotest import autotest
 
 @autotest
-def testRiseAndSet():
-    sun = rise_and_set(52., 5.6)
-    t_rise, t_set = sun.next()
-    assert type(t_rise) == time, type(t_rise)
-    assert type(t_set) == time, type(t_set)
-    t_rise, t_set = sun.send(date(2014,6,21))
-    assert t_rise == time(5,16,55,000005), t_rise
-    assert t_set == time(22,01,47,000005), t_set
-    t_rise, t_set = sun.send(datetime(2014,6,21,12,00)) # make sure it finds latest, not next sun rise
-    assert t_rise == time(5,16,55,000005), t_rise
-    assert t_set == time(22,01,47,000005), t_set
+def Twilights():
+    ede = location(lat=52, lon=5.6)
+    clock.set(datetime(2014,1,26))
+    t_dawn_begin, t_dawn_end, t_dusk_begin, t_dusk_end = ede.twilights(None)
+    print t_dawn_begin, t_dawn_end, t_dusk_begin, t_dusk_end
+    # 21 june:  04:24  06:09  21:09  22:54
+    # 21 dec:   07:59  09:42  15:29  17:11
+    assert t_dawn_begin < t_dawn_end
+    assert t_dawn_end < t_dusk_begin
+    assert t_dusk_begin < t_dusk_end
+    assert datetime(2014,1,26,  4,24) < t_dawn_begin < datetime(2014,1,26,  8,00), t_dawn_begin
+    assert datetime(2014,1,26,  6, 9) < t_dawn_end   < datetime(2014,1,26,  9,43)
+    assert datetime(2014,1,26, 15,29) < t_dusk_begin < datetime(2014,1,26, 21, 9)
+    assert datetime(2014,1,26, 17,11) < t_dusk_end   < datetime(2014,1,26, 22,55)
 
+@autotest
+def RiseAndSet():
+    sun = rise_and_set(52., 5.6)
+    clock.set(datetime(2014,6,21))
+    t_rise, t_set = sun.next()
+    assert type(t_rise) == datetime, type(t_rise)
+    assert type(t_set) == datetime, type(t_set)
+    assert t_rise == datetime(2014,6,21,  5,16,55,000005), t_rise
+    assert  t_set == datetime(2014,6,21, 22,01,47,000005), t_set
+    clock.set(datetime(2014,6,21, 12,00))
+    t_rise, t_set = sun.next() # make sure it finds next, not latest
+    assert t_rise == datetime(2014,6,22,  5,17, 9,000006), t_rise
+    assert  t_set == datetime(2014,6,21, 22,01,47,000005), t_set
+    clock.set(datetime(2014, 6, 21, 23,00))
+    t_rise, t_set = sun.next() # make sure it finds next, not latest
+    assert t_rise == datetime(2014,6,22,  5,17, 9,000006), t_rise
+    assert  t_set == datetime(2014,6,22, 22,01,57,000006), t_set
+
+@autotest
+def DawnsAndDusks():
+    ede = location(lat=52, lon=5.6)
+    assert ede.lat == 52
+    clock.set(datetime(2014,6,21))
+    dawn_begin = ede.next_dawn()
+    assert datetime(2014,6,21, 4,24) < dawn_begin < datetime(2014,6,21, 8,00), dawn_begin
+    dawn_end = ede.next_dawn_end()
+    assert dawn_end > dawn_begin
+    assert datetime(2014,6,21, 6,9) < dawn_end < datetime(2014,6,21, 9,43), dawn_end
+    dusk_begin = ede.next_dusk()
+    assert dusk_begin > dawn_end
+    assert datetime(2014,6,21, 16,00) < dusk_begin < datetime(2014,6,21, 22,00), dusk_begin
+    dusk_end = ede.next_dusk_end()
+    assert dusk_end > dusk_begin
+    assert datetime(2014,6,21, 17,00) < dusk_end < datetime(2014,6,21, 23,59), dusk_end
 
 """
 We use MIREK instead of Kelvin as unit for color temperature because:

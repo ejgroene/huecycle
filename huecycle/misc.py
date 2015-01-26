@@ -1,7 +1,6 @@
 import rfc822
 from requests import put, get
 from json import dumps
-
 def autostart(f):
     def g(*args, **kwargs):
         h = f(*args, **kwargs)
@@ -27,11 +26,6 @@ def average():
     while True:
         v += yield v / n
         n += 1
-
-def autotest(f):
-    print "%s.%s" % (f.__module__, f.__name__),
-    f()
-    print " Ok."
 
 def interpolate(lo, hi, x, lo2, hi2):
     return lo2 + (float(x) - lo) * (hi2 - lo2) / (hi - lo)
@@ -64,6 +58,21 @@ def attenuator(light):
 def hours(t):
     return t.hour + t.minute / 60. 
 
+
+from datetime import datetime, timedelta
+def find_next_change(g):
+    t = datetime.now()
+    v = g.send(t)
+    while True:
+        yield t, v
+        prev = v
+        while v == prev:
+            t += timedelta(seconds=1)
+            v = g.send(t)
+
+
+from autotest import autotest
+
 @autotest
 def TimeDiff():
     from datetime import time
@@ -84,3 +93,36 @@ def TestGetState():
     l = lamp(LOCAL_HUE_API + "/lights/1")
     state = l.next()
     assert state["on"] in (False, True), state
+
+@autotest
+def FindNextChange():
+    ts = []
+    @autostart
+    def src():
+        ts.append((yield 1)) # t0
+        ts.append((yield 1)) # t1
+        ts.append((yield 2)) # t2
+        ts.append((yield 2)) # t3
+        ts.append((yield 2)) # t4
+        ts.append((yield 3)) # t5
+    t0 = datetime.now()
+    t1 = t0 + timedelta(seconds=1)
+    t2 = t0 + timedelta(seconds=2)
+    t3 = t0 + timedelta(seconds=3)
+    t4 = t0 + timedelta(seconds=4)
+    t5 = t0 + timedelta(seconds=5)
+    t6 = t0 + timedelta(seconds=6)
+    g = find_next_change(src())
+    t, v = g.next()
+    assert v == 1
+    assert t0 < t < t1
+    assert ts == [t], ts
+    t, v = g.next()
+    assert v == 2, v
+    assert t1 < t < t3
+    assert ts[-1] == t
+    t, v = g.next()
+    assert v == 3
+    assert t4 < t < t6
+    assert ts[-1] == t
+

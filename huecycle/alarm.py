@@ -44,7 +44,7 @@ def dispatch(scheduler, observer):
 from misc import autotest
 
 @autotest
-def TestSetToNextTimeWhenNoDate():
+def SetToNextTimeWhenNoDate():
     def observer1():
         yield time(23,59) # must be today
     def observer2():
@@ -58,7 +58,7 @@ def TestSetToNextTimeWhenNoDate():
     assert q[1].time == fourth_age(t)
 
 @autotest
-def TestSetAbsoluteDate():
+def SetAbsoluteDate():
     v = []
     def observer():
         t = yield datetime.now() + timedelta(seconds=0.1)
@@ -75,7 +75,7 @@ def TestSetAbsoluteDate():
     assert v == []
 
 @autotest
-def TestSetAlarmFromYieldValue():
+def SetAlarmFromYieldValue():
     v = []
     def observer(v):
         v.append((yield 0.1))
@@ -91,7 +91,7 @@ def TestSetAlarmFromYieldValue():
     assert v == []
 
 @autotest
-def TestSetAlarmInitialAlarm():
+def SetAlarmInitialAlarm():
     v = []
     def observer():
         t = yield 0.1

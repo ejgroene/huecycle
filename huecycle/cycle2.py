@@ -1,28 +1,38 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
 from sunphase import location
-ede = location(lat=52.053055, lon=5.638889)
-
 from datetime import time
-t_wake = time(7,15)
-t_sleep = time(22,45)
-
 from config import LOCAL_HUE_API
 from lights import lights_controller
-lights = lights_controller(baseurl=LOCAL_HUE_API)
-
-from controllers import switch_group_randomly
+from controllers import turn_on_between
 from alarm import alarm
-all_lights = list(lights.lights())
-alarm(
-    )
-
-
 from config import BRI_SINUS_CHARGE
 from phase import phase, sinus, charge
 from datetime import datetime, timedelta
+from time import sleep
+from clock import clock
+
+clock.set()
+
+ede = location(lat=52.053055, lon=5.638889)
+
+def t_lights_off():
+    while True:
+        yield time(23 if clock.date().weekday() in (4, 5) else 22, 45)
+
+lights = lights_controller(baseurl=LOCAL_HUE_API)
+
+all_lights = list(lights.lights())
+alarm(
+    turn_on_between(all_lights, lambda: time(7,00), ede.next_dawn_end),
+    turn_on_between(all_lights, ede.next_dusk, t_lights_off().next),
+    )
+
+
+t_wake = time(7,15)
+t_sleep = time(22,45)
+
 bri_phase = phase(t_wake, t_sleep, sinus(charge(BRI_SINUS_CHARGE)), 0, 255)
 def filter_new_values(g):
     t = datetime.now()
@@ -47,7 +57,6 @@ def adjust_brightness(light, events):
 
 #alarm(adjust_brightness(all_lights[0], filter_new_values(bri_phase)))
 
-from time import sleep
 f = filter_new_values(bri_phase)
 while True:
     sleep(1)

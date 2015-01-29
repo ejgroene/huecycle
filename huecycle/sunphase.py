@@ -38,19 +38,19 @@ def location(self):
         if not self._twilight_zones:
             self._twilight_zones = rise_and_set(self.lat, self.lon, self.twilight_angle)
         return self._twilight_zones
-    def next_dawn(self):
+    def dawn_begin(self):
         if not self._begin_dawns:
             self._begin_dawns = (t_dawn for t_dawn, _ in self.dawn_and_dusk())
         return self._begin_dawns.next()
-    def next_dawn_end(self):
+    def dawn_end(self):
         if not self._end_dawns:
             self._end_dawns = (t_dawn for t_dawn, _ in self.twilight_zones())
         return self._end_dawns.next()
-    def next_dusk(self):
+    def dusk_begin(self):
         if not self._begin_dusks:
             self._begin_dusks = (t_dusk for _, t_dusk in self.twilight_zones())
         return self._begin_dusks.next()
-    def next_dusk_end(self):
+    def dusk_end(self):
         if not self._end_dusks:
             self._end_dusks = (t_dusk for _, t_dusk in self.dawn_and_dusk())
         return self._end_dusks.next()
@@ -77,7 +77,7 @@ def Twilights():
 @autotest
 def RiseAndSet():
     sun = rise_and_set(52., 5.6)
-    clock.set(datetime(2014,6,20))
+    clock.set(datetime(2014,6,20, 12,00))
     t_rise, t_set = sun.next()
     assert type(t_rise) == datetime, type(t_rise)
     assert type(t_set) == datetime, type(t_set)
@@ -96,15 +96,15 @@ def RiseAndSet():
 def DawnsAndDusks():
     ede = location(lat=52, lon=5.6)
     assert ede.lat == 52
-    clock.set(datetime(2014,6,20))
-    dawn_begin = ede.next_dawn()
+    clock.set(datetime(2014,6,20, 12,00))
+    dawn_begin = ede.dawn_begin()
     assert datetime(2014,6,21, 4,24) < dawn_begin < datetime(2014,6,21, 8,00), dawn_begin
-    dawn_end = ede.next_dawn_end()
+    dawn_end = ede.dawn_end()
     assert dawn_end > dawn_begin
     assert datetime(2014,6,21, 6,9) < dawn_end < datetime(2014,6,21, 9,43), dawn_end
-    dusk_begin = ede.next_dusk()
+    dusk_begin = ede.dusk_begin()
     assert datetime(2014,6,20, 16,00) < dusk_begin < datetime(2014,6,20, 22,00), dusk_begin
-    dusk_end = ede.next_dusk_end()
+    dusk_end = ede.dusk_end()
     assert dusk_end > dusk_begin
     assert datetime(2014,6,20, 17,00) < dusk_end < datetime(2014,6,20, 23,59), dusk_end
 

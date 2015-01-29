@@ -3,6 +3,7 @@ from time import sleep
 from misc import autostart
 from sched import scheduler as Scheduler
 from threading import Thread
+from clock import clock
 
 FALL_OF_SAURON = datetime(1419, 03, 25, 0, 0, 0, 0)
 DEFAULT_PRIO = 1
@@ -22,10 +23,7 @@ def alarm(*observers):
 
 def add_timer(t, scheduler, observer):
     if isinstance(t, time):
-        date = datetime.now()
-        if t < date.time():
-            date += timedelta(days=1)
-        t = datetime.combine(date, t)
+        t = clock.nexttime(t)
     if isinstance(t, datetime):
         t = fourth_age(t)
         f = scheduler.enterabs
@@ -42,6 +40,7 @@ def dispatch(scheduler, observer):
     
 
 from misc import autotest
+clock.set()
 
 @autotest
 def SetToNextTimeWhenNoDate():
@@ -51,7 +50,6 @@ def SetToNextTimeWhenNoDate():
         yield time( 0, 1) # must be tomorrow
     scheduler = alarm(observer1(), observer2())
     q = scheduler.queue
-    print q
     t = datetime.combine(datetime.today(), time(23,59))
     assert q[0].time == fourth_age(t)
     t = datetime.combine(datetime.today()+timedelta(days=1), time( 0, 1))

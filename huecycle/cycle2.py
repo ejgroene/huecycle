@@ -17,21 +17,24 @@ clock.set()
 
 ede = location(lat=52.053055, lon=5.638889)
 
-def t_lights_off():
-    while True:
-        yield time(23 if clock.date().weekday() in (4, 5) else 22, 45)
+def bed_time():
+    return time(23 if clock.date().weekday() in (4, 5) else 22, 45)
+
+def wake_time():
+    return time( 8 if clock.date().weekday() in (5, 6) else  7, 15)
+
 
 lights = lights_controller(baseurl=LOCAL_HUE_API)
 
 all_lights = list(lights.lights())
 alarm(
-    turn_on_between(all_lights, lambda: time(7,00), ede.next_dawn_end),
-    turn_on_between(all_lights, ede.next_dusk, t_lights_off().next),
+    turn_on_between(all_lights, wake_time     , ede.dawn_end),
+    turn_on_between(all_lights, ede.dusk_begin, bed_time    ),
     )
 
 
 t_wake = time(7,15)
-t_sleep = time(22,45)
+t_sleep = time(22,15)
 
 bri_phase = phase(t_wake, t_sleep, sinus(charge(BRI_SINUS_CHARGE)), 0, 255)
 def filter_new_values(g):

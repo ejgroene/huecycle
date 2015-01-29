@@ -3,26 +3,33 @@ from datetime import time, datetime, timedelta, date
 from clock import clock
 from misc import autostart
 
+HOUR = 3600
+
 def turn_on_between(members, t_ons, t_offs):
     while True:
-        t_on = clock.nexttime(t_ons())
-        t_off = clock.nexttime(t_offs())
-        if t_off > t_on + timedelta(minutes=5):
-            print "Next ON:", t_on
-            yield t_on
-            for light in members:
-                yield randint(1,60)
-                light.turn_on(True)
-            print "Next OFF:", t_on
+        t_on = t_ons()
+        t_off = t_offs()
+        if isinstance(t_on, datetime): t_on = t_on.time()
+        if isinstance(t_off, datetime): t_off = t_off.time()
+        if t_on < t_off:
+            if not t_on < clock.time() < t_off:
+                print "Next ON:", t_on
+                yield t_on
+                for light in members:
+                    yield randint(1,60)
+                    light.turn_on(True)
+            print "Next OFF:", t_off
             yield t_off
             for light in members:
                 yield randint(1,60)
                 light.turn_on(False)
-        yield 4 * 3600
+        else:
+            yield HOUR
 
 
 from prototype import object
-from autotest import autotest
+from autotest import autotest, any_number
+
 
 cmds = []
 @object
@@ -33,47 +40,59 @@ def mocktarget(self):
         return "mock light"
         cmds
 
+def mockdawns():
+    yield     time(          8,04,00)
+    yield datetime(2000,1,1, 8,05,00)
+    yield     time(          8,06,00)
+
 @autotest
 def TurnOnAtDawnForAtLeast5Min():
-    def mockdawns():
-        yield datetime(2000,1,1,8,05,01) # turn on at 8 for 5 min
-        yield     time(         8,04,59) # do not turn on
-        yield datetime(2000,1,1,8,06,02) # turn on
-    c = turn_on_between([mocktarget], lambda: time(8,00), mockdawns().next)
     clock.set(datetime(2010,1,1, 7,00))
-    dt = c.next()
-    assert dt == datetime(2010,1,1, 8,00), dt
+    c = turn_on_between([mocktarget], lambda: time(8,00), mockdawns().next)
+    ts = list(c)
+    assert ts[0] == time(8,00), ts[0]
+    assert 1 <= ts[1] <= 60
+    assert ts[2] == time(8,04), ts[2]
+    assert 1 <= ts[3] <= 60
+    assert ts[4] == time(8,00), ts[4]
+    assert 1 <= ts[5] <= 60
+    assert ts[6] == time(8,05), ts[6]
+    assert 1 <= ts[7] <= 60
+    assert ts[8] == time(8,00), ts[8]
+    assert 1 <= ts[9] <= 60
+    assert ts[10] == time(8,06), ts[10]
+    assert cmds == [True, False, True, False, True, False], cmds
 
-    dt = c.next()
-    assert 1 <= dt <= 60
+@autotest
+def SkipOnIfTimeWithinInterval():
+    cmds[:] = []
+    clock.set(datetime(2010,1,1, 8,01))
+    c = turn_on_between([mocktarget], lambda: time(8,00), mockdawns().next)
+    ts = list(c)
+    assert ts == [time(8,04), any_number(1,60), time(8,05), any_number(1,60), time(8,06), any_number(1,60)]
+    assert cmds == [False, False, False], cmds
 
-    dt = c.next()
-    assert dt == datetime(2010,1,1, 8,05,01), dt
+@autotest
+def SkipIfEndBeforeBeginAndWait():
+    c = turn_on_between([mocktarget], lambda: time(9,00), mockdawns().next)
+    ts = list(c)
+    assert [HOUR, HOUR, HOUR] == ts, ts
 
-    dt = c.next()
-    assert 1 <= dt <= 60
+@autotest
+def GoToNextDayOnWhenTimeAfterOff():
+    cmds[:] = []
+    clock.set(datetime(2010,1,1, 9,00))
+    c = turn_on_between([mocktarget], lambda: time(8,00), mockdawns().next)
+    ts = list(c)
+    assert ts == [time(8,00), any_number(1,60), time(8,04), any_number(1,60), time(8,00), any_number(1,60), time(8,05), any_number(1,60), time(8,00), any_number(1,60), time(8,06), any_number(1,60)], ts
+    assert cmds == [True, False, True, False, True, False], cmds
 
-    dt = c.next()
-    assert dt == 4 * 3600
-
-    dt = c.next()
-    assert dt == 4 * 3600
-
-    dt = c.next()
-    assert dt == datetime(2010,1,1, 8,00), dt
-
-    dt = c.next()
-    assert 1 <= dt <= 60
-
-    dt = c.next()
-    assert dt == datetime(2010,1,1, 8,06,02), dt
-
-    dt = c.next()
-    assert 1 <= dt <= 60
-
-    dt = c.next()
-    assert dt == 4 * 3600
-
-    assert list(c) == [] # no more events
-    assert cmds == [True, False, True, False], cmds
-
+@autotest
+def WorkWithDatetime():
+    cmds[:] = []
+    clock.set(datetime(2010,1,1, 8,01))
+    c = turn_on_between([mocktarget], lambda: datetime(2010,12,31, 8,00), mockdawns().next)
+    ts = list(c)
+    assert ts == [time(8,04), any_number(1,60), time(8,05), any_number(1,60), time(8,06), any_number(1,60)]
+    assert cmds == [False, False, False], cmds
+    

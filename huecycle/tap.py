@@ -29,6 +29,14 @@ def tap_control(self):
         self.bridge.create_rule("tap-%s-off" % self.id,
             button_hit(self.id, BUTTON1) + flag_eq(self.flag.id, "true"),
             [put_light(light, on=False) for light in self.lights] + [put_flag(self.flag.id, flag=False)])
+    def external_switch(self):
+        @self
+        def switch(self):
+            def turn_on(self, on):
+                for light in self.lights:
+                    self.bridge.send("/lights/%s/state" % light, on=on)
+                self.flag.send("/state", flag=on)
+        return switch
 
 from autotest import autotest
 from bridge import bridge
@@ -84,6 +92,20 @@ def TapControl():
     assert off_rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
     assert off_rule["conditions"][2] == dict(address="/sensors/%s/state/flag" % flag_id, operator="eq", value="true")
 
+@autotest
+def ExternalSwitch():
+    tap = tap_control(bridge=b, id=2, lights=(1,))
+    tap.init()
+    flag = tap.flag.id
+    switch = tap.external_switch()
+    assert switch
+    switch.turn_on(True)
+    assert b.lights().lights[1].state["on"] == True
+    assert b.sensors().sensors[flag].state["flag"] == True
+    switch.turn_on(False)
+    assert b.lights().lights[1].state["on"] == False
+    assert b.sensors().sensors[flag].state["flag"] == False
+    
 @autotest
 def InvalidTapId():
     tap = tap_control(bridge=b, id=1)

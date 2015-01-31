@@ -18,7 +18,9 @@ from tap import tap_control
 
 clock.set()
 
-ede = location(lat=52.053055, lon=5.638889)
+local_bridge = bridge(baseurl=LOCAL_HUE_API)
+tap_beneden = tap_control(bridge=local_bridge, id=2, lights=(1, 2, 3, 4, 5) )
+tap_beneden.init()
 
 def bed_time():
     return time(23 if clock.date().weekday() in (4, 5) else 22, 45)
@@ -26,20 +28,13 @@ def bed_time():
 def wake_time():
     return time( 8 if clock.date().weekday() in (5, 6) else  7, 15)
 
+ede = location(lat=52.053055, lon=5.638889)
 
-lights = lights_controller(baseurl=LOCAL_HUE_API)
-
-all_lights = list(lights.lights())
 alarm(
-    turn_on_between(all_lights, wake_time     , ede.dawn_end),
-    turn_on_between(all_lights, ede.dusk_begin, bed_time    ),
+    turn_on_between((tap_beneden.external_switch(),), wake_time     , ede.dawn_end),
+    turn_on_between((tap_beneden.external_switch(),), ede.dusk_begin, bed_time    ),
     )
 
-
-local_bridge = bridge(baseurl=LOCAL_HUE_API)
-
-tap_beneden = tap_control(bridge=local_bridge, id=2, lights=(1, 2, 3, 4, 5) )
-tap_beneden.init()
 
 t_wake = time(7,15)
 t_sleep = time(22,15)

@@ -34,7 +34,7 @@ def bridge(self):
         @self
         def lights_state(self):
             self.subpath = "/lights"
-            self.update_state()
+            self.lights = object(self, **self.info())
         return lights_state
 
 from autotest import autotest
@@ -68,5 +68,5 @@ def GetLights():
     b = bridge(baseurl=LOCAL_HUE_API)
     lights = b.lights()
     assert lights
-    assert lights[1].name == "Studeer", lights[1].name
+    assert lights.lights[1].name == "Studeer", lights[1].name
     

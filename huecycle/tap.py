@@ -67,7 +67,6 @@ def TapControl():
 
     rules = b.rules()
     on_rule = (rule for id, rule in rules.rules if rule["name"].startswith("tap-%s-on" % 2)).next()
-    print on_rule
     assert on_rule["name"] == "tap-2-on"
     assert on_rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(on=True))
     assert on_rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(on=True))

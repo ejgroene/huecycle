@@ -1,5 +1,5 @@
 from sensors import flag_sensor, status_sensor
-from http import post, delete, get, put
+from rest import post, delete, get, put
 from sunphase import MIREK
 
 def get_rules(API):

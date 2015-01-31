@@ -1,5 +1,5 @@
 from prototype import object
-from rest import get, put
+from rest import get, put, post
 
 @object
 def bridge(self):
@@ -11,6 +11,8 @@ def bridge(self):
         self.update(self.info())
     def send(self, part, **kwargs):
         put(self.url() + part, **kwargs)
+    def create_rule(self, name, conditions, actions):
+        return int(post(self.baseurl + "/rules", name=name, conditions=conditions, actions=actions)["id"])
     def config(self):
         @self
         def config_state(self):
@@ -20,13 +22,13 @@ def bridge(self):
         @self
         def sensor_state(self):
             self.subpath = "/sensors"
-            self.update_state()
+            self.sensors = object(self, **self.info())
         return sensor_state
     def rules(self):
         @self
         def rules_state(self):
             self.subpath = "/rules"
-            self.update_state()
+            self.rules = object(self, **self.info())
         return rules_state
     def lights(self):
         @self
@@ -51,15 +53,15 @@ def GetSensors():
     b = bridge(baseurl=LOCAL_HUE_API)
     sensors = b.sensors()
     assert sensors
-    assert sensors[1].name == "Daylight"
-    assert sensors[1].config.on == True
+    assert sensors.sensors[1].name == "Daylight"
+    assert sensors.sensors[1].config.on == True
 
 @autotest
 def GetRules():
     b = bridge(baseurl=LOCAL_HUE_API)
     rules = b.rules()
     assert rules
-    assert "Turn" in rules[1].name, rules[1].name
+    #assert "Turn" in rules.rules[1].name, rules.rules[1].name
 
 @autotest
 def GetLights():

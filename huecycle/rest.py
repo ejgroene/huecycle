@@ -8,10 +8,18 @@ def go(method, *args, **kwargs):
     assert r.status_code == 200, r
     assert len(r.json) == 1, r.json
     response = r.json[0]
+    return check_status(response)
+
+def check_status(response):
+    if isinstance(response, list):
+        response = response[0]
+    if "error" in response:
+        if response["error"]["type"] not in IGNORED_ERRORS:
+            raise Exception("%(description)s (%(address)s)" % response["error"])
+        return
     if "success" in response:
         return response["success"]
-    elif response["error"]["type"] not in IGNORED_ERRORS:
-        raise Exception("%(description)s (%(address)s)" % response["error"])
+    return response
 
 def post(url, **kwargs):
     return go(requests.post, url, dumps(kwargs))
@@ -25,7 +33,7 @@ def put(url, **kwargs):
 def get(url):
     r = requests.get(url)
     assert r.status_code == 200, r
-    return r.json
+    return check_status(r.json)
 
 from misc import autotest
 

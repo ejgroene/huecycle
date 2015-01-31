@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 from time import sleep
 from clock import clock
 
+from bridge import bridge
+from tap import tap_control
+
 clock.set()
 
 ede = location(lat=52.053055, lon=5.638889)
@@ -33,22 +36,16 @@ alarm(
     )
 
 
+local_bridge = bridge(baseurl=LOCAL_HUE_API)
+
+tap_beneden = tap_control(bridge=local_bridge, id=2, lights=(1, 2, 3, 4, 5) )
+tap_beneden.init()
+
 t_wake = time(7,15)
 t_sleep = time(22,15)
 
 bri_phase = phase(t_wake, t_sleep, sinus(charge(BRI_SINUS_CHARGE)), 0, 255)
-def filter_new_values(g):
-    t = datetime.now()
-    last = g.next()
-    yield t, last
-    while True:
-        t = datetime.now()
-        next = g.send(t)
-        while next == last:
-            t = t + timedelta(seconds=1)
-            next = g.send(t)
-        yield t, next
-        last = next
+
 
 def adjust_brightness(light, events):
     while True:
@@ -59,7 +56,7 @@ def adjust_brightness(light, events):
         light.set_state(bri=v)
 
 #alarm(adjust_brightness(all_lights[0], filter_new_values(bri_phase)))
+#f = filter_new_values(bri_phase)
 
-f = filter_new_values(bri_phase)
 while True:
     sleep(1)

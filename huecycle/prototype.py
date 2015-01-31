@@ -55,6 +55,9 @@ class prototype(object_):
     def __repr__(self):
         return repr(self.__dict__)
 
+    def __iter__(self): #TESTME
+        return ((name, value) for name, value in self.__dict__.iteritems() if not name.startswith("__"))
+
     def update(self, kws):
         return self.__dict__.update(kws)
 

@@ -6,9 +6,9 @@ IGNORED_ERRORS = (201,)
 def go(method, *args, **kwargs):
     r = method(*args, **kwargs)
     assert r.status_code == 200, r
-    assert len(r.json) == 1, r.json
-    response = r.json[0]
-    return check_status(response)
+    if len(r.json) == 1:
+        response = r.json[0]
+        return check_status(response)
 
 def check_status(response):
     if isinstance(response, list):

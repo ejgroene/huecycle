@@ -3,39 +3,45 @@ from rest import get, put, post
 
 @object
 def bridge(self):
+    def path(self):
+        return ""
     def url(self):
-        return self.baseurl + (self.subpath if self.subpath else "")
+        return self.baseurl + self.path()
     def info(self):
         return get(self.url())
     def update_state(self):
         self.update(self.info())
     def send(self, part, **kwargs):
         put(self.url() + part, **kwargs)
+    def read(self, path):
+        return get(self.baseurl + path)
     def create_rule(self, name, conditions, actions):
         return int(post(self.baseurl + "/rules", name=name, conditions=conditions, actions=actions)["id"])
     def config(self):
-        @self
-        def config_state(self):
-            self.update(self.info()["config"])
-        return config_state
+        return self(**self.read("/config"))
+
     def sensors(self):
         @self
-        def sensor_state(self):
-            self.subpath = "/sensors"
-            self.sensors = object(self, **self.info())
-        return sensor_state
+        def sensor(self):
+            def path(self): return "/sensors/%d" % self.id
+        for id, attrs in self.read("/sensors").iteritems():
+            yield sensor(id=int(id), **attrs)
+
     def rules(self):
         @self
-        def rules_state(self):
-            self.subpath = "/rules"
-            self.rules = object(self, **self.info())
-        return rules_state
+        def rule(self):
+            def path(self): return "/rules/%d" % self.id
+        for id, attrs in self.read("/rules").iteritems():
+            yield rule(id=int(id), **attrs)
+
     def lights(self):
         @self
-        def lights_state(self):
-            self.subpath = "/lights"
-            self.lights = object(self, **self.info())
-        return lights_state
+        def light(self):
+            def path(self): return "/lights/%d" % self.id
+            def turn_on(self, on=True):
+                self.send("/state", on=on)
+        for id, attrs in self.read("/lights").iteritems():
+            yield light(id=int(id), **attrs)
 
 from autotest import autotest
 from config import LOCAL_HUE_API
@@ -51,22 +57,31 @@ def ConnectBridge():
 @autotest
 def GetSensors():
     b = bridge(baseurl=LOCAL_HUE_API)
-    sensors = b.sensors()
-    assert sensors
-    assert sensors.sensors[1].name == "Daylight"
-    assert sensors.sensors[1].config.on == True
+    sensor = b.sensors().next()
+    assert sensor.id == 1
+    assert sensor.name == "Daylight", sensor
+    assert sensor.config.on == True
 
 @autotest
 def GetRules():
     b = bridge(baseurl=LOCAL_HUE_API)
-    rules = b.rules()
-    assert rules
-    #assert "Turn" in rules.rules[1].name, rules.rules[1].name
+    rule = b.rules().next()
+    assert "tap-" in rule.name, rule.name
 
 @autotest
 def GetLights():
     b = bridge(baseurl=LOCAL_HUE_API)
     lights = b.lights()
     assert lights
-    assert lights.lights[1].name == "Studeer", lights[1].name
+    l1 = lights.next()
+    assert l1.id == 1, l1.id
+    assert l1.name == "Bureaulamp"
+    assert l1.modelid == "LCT001"
+    assert l1.state["on"] in (True, False)
+    l1.turn_on(False)
+    l1 = b.lights().next()
+    assert l1.state["on"] == False
+    l1.turn_on(True)
+    l1 = b.lights().next()
+    assert l1.state["on"] == True
     

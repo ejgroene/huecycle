@@ -15,7 +15,8 @@ def tap(url, n):
         yield r["state"]["buttonevent"]
 
 @object
-def tap_control(self):
+def tap_control():
+
     def init(self):
         self._tap_sensor = sensor(baseurl=self.bridge.baseurl, id=self.id)
         assert self._tap_sensor.info()["type"] == "ZGPSwitch", "Sensor %s is not a Tap." % self.id
@@ -23,28 +24,32 @@ def tap_control(self):
         self.flag.init()
         self.status = status_sensor(baseurl=self.bridge.baseurl, name="tap-%s-status" % self.id)
         self.status.init()
-        self.bridge.create_rule("tap-%s-on" % self.id,
-            button_hit(self.id, BUTTON1) + flag_eq(self.flag.id, "false"),
-            [put_light(light.id, on=True) for light in self.lights] + [put_flag(self.flag.id, flag=True)])
-        self.bridge.create_rule("tap-%s-off" % self.id,
-            button_hit(self.id, BUTTON1) + flag_eq(self.flag.id, "true"),
-            [put_light(light.id, on=False) for light in self.lights] + [put_flag(self.flag.id, flag=False)])
+        def put_lights(**kwargs):
+            return [put_light(light.id, **kwargs) for light in self.lights]
+        def create_onoff_rule(name, btn, s0, s1):
+            self.bridge.create_rule("tap-%s-%s" % (self.id, name),
+                button_hit(self.id, btn) + flag_eq(self.flag.id, s0),
+                put_lights(on=s1) + [put_flag(self.flag.id, flag=s1)])
+        create_onoff_rule("on", BUTTON1, "false", True)
+        create_onoff_rule("off", BUTTON1, "true", False)
         def create_rule(btn, s0, s1, bri):
             self.bridge.create_rule("tap-%s-step-%d-%d" % (self.id, s0, s1),
                 button_hit(self.id, btn) + status_eq(self.status.id, str(s0)),
-                [put_light(light.id, bri=bri) for light in self.lights] + [put_flag(self.status.id, status=s1)])
+                put_lights(bri=bri) + [put_flag(self.status.id, status=s1)])
         create_rule(BUTTON4, 0, 1, 127)
         create_rule(BUTTON4, 1, 2, 191)
         create_rule(BUTTON4, 2, 3, 255)
         create_rule(BUTTON2, 3, 2, 191)
         create_rule(BUTTON2, 2, 1, 127)
         create_rule(BUTTON2, 1, 0,  63)
+
     def external_switch(self):
         def turn_on(self, on):
-            self.flag.send("/state", flag=on)
+            self.flag.state().send(flag=on)
         def send(self, bri=0, **kwargs):
-            self.status.send("/state", status=max(0, bri - 32) // 64)
-        return self(turn_on=turn_on, send=send)
+            self.status.state().send(status=max(0, bri - 32) // 64)
+        return self(turn_on, send)
+
     return locals()
 
 from autotest import autotest

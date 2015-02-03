@@ -1,60 +1,88 @@
 from inspect import iscode
 from types import FunctionType, MethodType
 
-object_ = object
+object_ = object # Yes, this module redefines the meaning of object
 
-class Self(object):
-    def __init__(me, self, this):
-        me.self = self
-        me.this = this
-    def __getattribute__(me, name):
-        if name in ("this", "self"): return object_.__getattribute__(me, name)
-        return getattr(object_.__getattribute__(me, "self"), name)
-    def __setattr__(me, name, value):
-        if name in ("this", "self"): return object_.__setattr__(me, name, value)
-        setattr(me.self, name, value)
-    def __eq__(me, rhs): 
-        return rhs == me.self
-    def __call__(me, *args, **kwargs): #TestMe
-        return object_.__getattribute__(me, "self").__call__(*args, **kwargs)
-    def __getitem__(me, name):
-        return object_.__getattribute__(me, "self")[name]
+class __self__(object_):
+
+    def __init__(self, __self__, __this__):
+        self.__self__ = __self__
+        self.__this__ = __this__
+
+    @property
+    def up(self):
+        return __defer__(self.__self__, self.__this__.__prototypes__[1:])
+
+    def __getattribute__(self, name):
+        if name.startswith("__") or name in ("up",):
+            return object_.__getattribute__(self, name)
+        return __defer__(self.__self__, self.__self__.__prototypes__).__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name.startswith("__"):
+            return object_.__setattr__(self, name, value)
+        setattr(self.__self__, name, value)
+
+    def __eq__(self, rhs): 
+        return rhs == self.__self__
+
+    def __call__(self, *args, **kwargs):
+        return self.__self__.__call__(*args, **kwargs)
+
+    def __contains__(self, name):
+        return name in self.__self__
+
+    def __getitem__(self, name):
+        return self.__self__[name]
+
+class __defer__(object_):
+
+    def __init__(self, __self__, __prototypes__):
+        self.__self__ = __self__
+        self.__prototypes__ = __prototypes__
+
+    def __getattribute__(self, name):
+        if name.startswith("__"):
+            return object_.__getattribute__(self, name)
+        for prototype in self.__prototypes__:
+            try:
+                attribute = object_.__getattribute__(prototype, name)
+            except AttributeError:
+                continue
+            if isinstance(attribute, FunctionType):
+                return  MethodType(attribute, __self__(self.__self__, prototype))
+            if isinstance(attribute, dict):
+                return object(self.__self__, **dict((str(k),v) for k,v in attribute.iteritems()))
+            return attribute
 
 class object(object_):
 
     def __getitem__(self, name):
-        return getattr(self, str(name))  #TestMe
+        return getattr(self, str(name)) 
 
     def __getattribute__(self, name):
-        for proto in object_.__getattribute__(self, "__prototypes__"):
-            try:
-                attr = object_.__getattribute__(proto, name)
-            except AttributeError:
-                continue
-            if isinstance(attr, FunctionType):
-                return  MethodType(attr, Self(self, proto))
-            if isinstance(attr, dict) and not name == "__dict__": #TestMe
-                return prototype(self, None, **attr)                #TestMe
-            return attr
+        if name.startswith("__"):
+            return object_.__getattribute__(self, name)
+        return __defer__(self, self.__prototypes__).__getattribute__(name)
 
-    def __init__(self, *args, **kwargs):
-        ''' @decorator:         __init__(self, func)
-            with attributes:    __init__(self, func..., **attrs)
-            with prototype:     __init__(self, prototype, func0..., **attrs)
-        '''
+    def __init__(self, *prototypes_or_functions, **attributes):
         self.__prototypes__ = (self,)
-        for arg in args:
+        for arg in prototypes_or_functions:
             if isinstance(arg, object):
                 self.__prototypes__ += arg.__prototypes__
             elif isinstance(arg, FunctionType):
                 if arg.__code__.co_varnames[:1] == ('self',):
-                    kwargs[arg.__name__] = arg
+                    attributes[arg.__name__] = arg
                 elif arg.__code__.co_argcount == 0:
-                    kwargs.update(arg())
-        self.__dict__.update(kwargs)
+                    attributes.update(arg())
+                else:
+                    raise Exception("function '%s' must accept no args or first arg must be 'self'" % arg.__name__)
+            else:
+                raise Exception("arg '%s' must be a constructor, prototype or method" % arg)
+        self.__dict__.update(attributes)
            
-    def __call__(self, *args, **kwargs):
-        return object(self, *args, **kwargs)
+    def __call__(self, *prototypes_or_functions, **attributes):
+        return object(self, *prototypes_or_functions, **attributes)
 
     def __contains__(self, name):
         return name in self.__dict__
@@ -62,13 +90,61 @@ class object(object_):
     def __repr__(self):
         return repr(dict(self.__iter__()))
 
-    def __iter__(self): #TESTME
+    def __iter__(self):
         return ((name, value) for name, value in self.__dict__.iteritems() if not name.startswith("_"))
 
-    def update(self, kws):
-        return self.__dict__.update(kws)
+    def update(self, attributes):
+        return self.__dict__.update(attributes)
 
 from autotest import autotest
+
+@autotest
+def CheckFunctions():
+    def f(not_self, a, b=10):
+        pass
+    try:
+        object(f)
+        assert False
+    except Exception as e:
+        assert str(e) == "function 'f' must accept no args or first arg must be 'self'", e
+    def g(a, b):
+        pass
+    try:
+        object(g)
+        assert False
+    except Exception as e:
+        assert str(e) == "function 'g' must accept no args or first arg must be 'self'"
+    try:
+        object('10')
+        assert False
+    except Exception as e:
+        assert str(e) == "arg '10' must be a constructor, prototype or method", e
+
+
+@autotest
+def UseTwoPrototypes():
+    def f1(self):
+        return "f1"
+    o1 = object(f1)
+    def f2(self):
+        return "f2"
+    o2 = object(f2)
+    o3 = object(o1, o2)
+    assert o3.f1() == "f1"
+    assert o3.f2() == "f2"
+    def f2(self):
+        return "new f2"
+    o4 = object(f2)
+    o5 = object(o3, o4)
+    assert o5.f2() == "f2"
+    o5 = object(o4, o3)
+    assert o5.f2() == "new f2"
+    def f2(self):
+        return "own f2"
+    o6 = object(o5, o4, o3, o2, o1, f2)
+    assert o6.f2() == "own f2"
+    assert o6.f1() == "f1"
+    
 
 @autotest
 def CreateObject1():
@@ -93,19 +169,37 @@ def CreateObject1():
         return {"a": 23}
     o3 = object(o2, ctor)
     assert o3.a == 23, o3.a
+    o3 = object(o2, lambda self: 23, lambda self: 56, lambda: {"x": 89})
+    assert o3["<lambda>"]() == 56  #yuk
+    assert o3.x == 89
 
 @autotest
 def This():
     @object
     def Obj():
+        a = 42
         def f(self):
-            return self, self.this
+            return self, self.__this__
+        def g(self):
+            return self.a
         return locals()
-    assert Obj.f() == (Obj, Obj)
+    assert Obj.f() == (Obj, Obj), Obj.f()
+    assert Obj.g() == 42
     @Obj
+    def Obj1():
+        def g(self):
+            return 2 * self.up.g()
+        return locals()
+    @Obj1
     def Obj2():
+        def f(self):
+            return self.up.f()
+        def g(self):
+            self.a = 12
+            return self.up.g() * 2
         return locals()
     assert Obj2.f() == (Obj2, Obj)
+    assert Obj2.g() == 48, Obj2.g()
 
 @autotest
 def CreateObjectFromPrototype():
@@ -145,7 +239,7 @@ def CreatePrototype():
     def p1():
         prop = 1 + 2
         prak = "aa"
-        def f(self): return self.this
+        def f(self): return self.__this__
         return locals()
     assert p1
     assert p1.f()
@@ -310,3 +404,57 @@ def SimplerWithFunctionsAsProperties():
     o3 = o(f, g)
     assert o3.f() == "Hello!"
     assert o3.g() == "Goodbye!"
+
+@autotest
+def EmbeddedObjectCreationWithSelfAsDecorator():
+    def f(self):
+        @self
+        def f():
+            return {"a": 42}
+        return f
+    o = object(f, a=24)
+    assert o.f().a == 42
+
+@autotest
+def Contains():
+    def f(self, a):
+        return a in self
+    o = object(f, a=10)
+    assert 'a' in o
+    assert o.f('a')
+    assert not o.f('b')
+
+
+@autotest
+def GetItem():
+    def f(self, a):
+        return self[a]
+    o = object(f, a=29)
+    assert o['a'] == 29
+    assert o.f('a') == 29
+
+@autotest
+def Equals():
+    def g(self):
+        return self
+    def f(self, a):
+        return self == a and a == self
+    o = object(f, g)
+    assert o == o.g()
+    assert o.g() == o
+    assert o.f(o)
+    assert not o.f(None)
+
+@autotest
+def IteratePublicAttributes():
+    def f(self): pass
+    def _g(self): pass
+    o = object(f, _g, a=10, _b=20)
+    assert [('f', f), ('a', 10)], list(o)
+
+@autotest
+def DictsBecomeObjects():
+    o = object(a={'b':{'c':{'d':3}}})
+    assert o.a.b.c.d == 3, o.a.b.c.d
+    o = object(a={'b':{2:{'d':3}}})
+    assert o.a.b[2].d == 3, o.a.b.c.d

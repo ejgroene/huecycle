@@ -6,7 +6,7 @@ IGNORED_ERRORS = (201,)
 def go(method, *args, **kwargs):
     r = method(*args, **kwargs)
     assert r.status_code == 200, r
-    if len(r.json) == 1:
+    if len(r.json) >= 1:
         response = r.json[0]
         return check_status(response)
 

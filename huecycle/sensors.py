@@ -8,51 +8,55 @@ def delete_all_sensors():
         delete(LOCAL_HUE_API + "/sensors/%s" % k)
 
 @object
-def sensor(self):
-    def address(self): return "/sensors/%s" % self.id
-    def url(self): return self.baseurl + self.address()
-    def info(self): return get(self.url())
-    def send(self, part, **data):
-        put(self.url() + part, **data)
-    def create(self, **data):
-        return post(self.baseurl + "/sensors", **data)
-    def init(self):
-        r = self.create(name=self.name, type=self.type, modelid=self.type,
-                        manufacturername=self.manufacturername, swversion=self.swversion, uniqueid=self.name)
-        self.id = int(r["id"])
+def sensor():
+    def path(self):
+        return "/sensors/%s" % self.id
+
+    def url(self):
+        return self.baseurl + self.path()
+
+    def info(self):
+        return get(self.url())
+
+    def send(self, **data):
+        put(self.url(), **data)
+
     def config(self):
-        @self
-        def config_state(self):
-            self.update(self.info()["config"])
-            def set(self, val):
-                self.send("/config", on=val)
-        return config_state
+        def path(self):
+            return self.up.path() + "/config"
+        def set(self, val):
+            self.send(on=val)
+        return self(set, path, **self.info()["config"])
+
     def state(self):
-        @self
-        def state_state(self):
-            self.update(self.info()["state"])
-            def set(self, val):
-                self.send("/state", **{self.attr_name:val})
-            def state_address(self):
-                return self.address() + "/state"
-        return state_state
+        def path(self):
+            return self.up.path() + "/state"
+        def set(self, val):
+            self.send(**{self.attr_name:val})
+        return self(set, path, **self.info()["state"])
+
+    return locals()
 
 tap = sensor()
 
 @sensor
-def synthetic(self):
-    self.manufacturername = "ErikGroeneveld"
-    self.swversion = "0.1"
+def synthetic_sensor():
+    manufacturername = "ErikGroeneveld"
+    swversion = "0.1"
 
-@synthetic
-def flag_sensor(self):
-    self.type = "CLIPGenericFlag"
-    self.attr_name = "flag"
+    def create(self, **data):
+        return post(self.baseurl + "/sensors", **data)
 
-@synthetic
-def status_sensor(self):
-    self.type = "CLIPGenericStatus"
-    self.attr_name = "status"
+    def init(self):
+        r = self.create(name=self.name, type=self.type, modelid=self.type,
+                        manufacturername=self.manufacturername, swversion=self.swversion, uniqueid=self.name)
+        self.id = int(r["id"])
+
+    return locals()
+
+flag_sensor = synthetic_sensor(type="CLIPGenericFlag", attr_name="flag")
+status_sensor = synthetic_sensor(type="CLIPGenericStatus", attr_name="status")
+
 
 from misc import autotest
 from config import LOCAL_HUE_API
@@ -61,7 +65,7 @@ from config import LOCAL_HUE_API
 def ReadTap():
     tap1 = tap(id=2)
     assert tap1.id == 2
-    assert tap1.address() == "/sensors/2"
+    assert tap1.path() == "/sensors/2"
     tap1.baseurl = LOCAL_HUE_API
     state = tap1.state()
     assert "lastupdated" in state
@@ -87,14 +91,14 @@ def ToggleFlagSensor():
     flag1.init()
     Id = flag1.id
     assert 0 < Id < 100, Id
-    assert flag1.address() == "/sensors/%s" % Id, flag1.address()
+    assert flag1.path() == "/sensors/%s" % Id, flag1.path()
     state = flag1.state()
     assert "flag" in state
     assert state.flag == False
     state.set(True)
     state = flag1.state()
     assert state.flag == True
-    assert state.state_address() == "/sensors/%s/state" % Id
+    assert state.path() == "/sensors/%s/state" % Id
 
 
 @autotest
@@ -103,14 +107,14 @@ def CreateAndSetStatusSensor():
     status1.init()
     Id = status1.id
     assert 0 < Id < 100, Id
-    assert status1.address() == "/sensors/%s" % Id, status1.address()
+    assert status1.path() == "/sensors/%s" % Id, status1.path()
     state = status1.state()
     assert "status" in state
     assert state.status == 0, state
     state.set(2)
     state = status1.state()
     assert state.status == 2, state
-    assert state.state_address() == "/sensors/%s/state" % Id
+    assert state.path() == "/sensors/%s/state" % Id
 
 @autotest
 def DeleteAllSensors():

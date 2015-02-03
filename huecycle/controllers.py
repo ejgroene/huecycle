@@ -33,12 +33,13 @@ from autotest import autotest, any_number
 
 cmds = []
 @object
-def mocktarget(self):
+def mocktarget():
     def turn_on(self, on):
         cmds.append(on)
     def name(self):
         return "mock light"
         cmds
+    return locals()
 
 def mockdawns():
     yield     time(          8,04,00)

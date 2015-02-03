@@ -28,8 +28,8 @@ def rise_and_set(lat, lon, horizon=0):
 from prototype import object
 
 @object
-def location(self):
-    self.twilight_angle = 6.0 # civil twilight
+def location():
+    twilight_angle = 6.0 # civil twilight
     def dawn_and_dusk(self):
         if not self._dawn_and_dusk:
             self._dawn_and_dusk = rise_and_set(self.lat, self.lon, -self.twilight_angle)
@@ -58,6 +58,7 @@ def location(self):
         t_dawn_begin, t_dusk_end = self.dawn_and_dusk().send(time)
         t_dawn_end, t_dusk_begin = self.twilight_zones().send(time)
         return t_dawn_begin, t_dawn_end, t_dusk_begin, t_dusk_end
+    return locals()
 
 from autotest import autotest
 

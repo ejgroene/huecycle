@@ -18,11 +18,10 @@ from tap import tap_control
 clock.set()
 
 local_bridge = bridge(baseurl=LOCAL_HUE_API)
-all_lights = list(local_bridge.lights())[:1]
+all_lights = tuple(local_bridge.lights())[:1]
 
 tap_beneden = tap_control(bridge=local_bridge, id=2, lights=all_lights)
 tap_beneden.init()
-switch = tap_beneden.external_switch()
 
 def bed_time():
     return time(23 if clock.date().weekday() in (4, 5) else 22, 45)
@@ -33,8 +32,8 @@ def wake_time():
 ede = location(lat=52.053055, lon=5.638889)
 
 alarm(
-    turn_on_between((switch,), wake_time     , ede.dawn_end),
-    turn_on_between((switch,), ede.dusk_begin, bed_time    ),
+    turn_on_between(all_lights + (tap_beneden,), wake_time     , ede.dawn_end),
+    turn_on_between(all_lights + (tap_beneden,), ede.dusk_begin, bed_time    ),
     )
 
 
@@ -42,7 +41,6 @@ t_wake = time(7,15)
 t_sleep = time(22,15)
 
 bri_phase = phase(t_wake, t_sleep, sinus(charge(BRI_SINUS_CHARGE)), 0, 255)
-
 
 def adjust_brightness(lights, events):
     while True:
@@ -54,7 +52,7 @@ def adjust_brightness(lights, events):
             light.send(bri=v)
 
 from misc import find_next_change
-alarm(adjust_brightness(all_lights + [switch], find_next_change(bri_phase)))
+alarm(adjust_brightness(all_lights + (tap_beneden,), find_next_change(bri_phase)))
 
 while True:
     sleep(1)

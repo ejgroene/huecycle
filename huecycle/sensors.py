@@ -1,5 +1,4 @@
 from rest import get, post, put, delete
-from json import dumps
 from prototype import object
 
 def delete_all_sensors():

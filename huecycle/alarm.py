@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, time
 from time import sleep
-from misc import autostart
 from sched import scheduler as Scheduler
 from threading import Thread
 from clock import clock
@@ -9,7 +8,7 @@ FALL_OF_SAURON = datetime(1419, 03, 25, 0, 0, 0, 0)
 DEFAULT_PRIO = 1
 
 def fourth_age(shire_time=None):
-    return ((shire_time or datetime.now()) - FALL_OF_SAURON).total_seconds()
+    return ((shire_time or clock.now()) - FALL_OF_SAURON).total_seconds()
 
 def alarm(*observers):
     scheduler = Scheduler(fourth_age, sleep)
@@ -33,7 +32,7 @@ def add_timer(t, scheduler, observer):
 
 def dispatch(scheduler, observer):
     try:
-        t = observer.send(datetime.now())
+        t = observer.send(clock.now())
     except StopIteration:
         return
     add_timer(t, scheduler, observer)
@@ -41,6 +40,17 @@ def dispatch(scheduler, observer):
 
 from misc import autotest
 clock.set()
+
+@autotest
+def UseClock():
+    t_now = datetime(3040, 12, 31, 23, 59)
+    t0 = fourth_age(t_now)
+    clock.set(t_now)
+    t1 = fourth_age()
+    assert t0 == t1
+    assert t0 == 51178262340.0
+    clock.set()
+
 
 @autotest
 def SetToNextTimeWhenNoDate():
@@ -98,6 +108,6 @@ def SetAlarmInitialAlarm():
     a = alarm(observer())
     assert v == [], v
     while not v: pass
-    assert 0.09 < (v.pop() - t0).total_seconds() < 0.11 
+    assert 0.09 < (v.pop() - t0).total_seconds() < 0.11
     assert v == []
 

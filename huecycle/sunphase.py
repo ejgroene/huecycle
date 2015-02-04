@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from misc import autostart, hours
+from misc import autostart
 from clock import clock
-from datetime import datetime, date, time
-from ephem import Observer, Sun, Moon, localtime
+from datetime import datetime, time
+from ephem import Observer, Sun, localtime
 from phase import phase, sinus, charge, linear
 
 @autostart
 def rise_and_set(lat, lon, horizon=0):
     sun = Sun()
-    moon = Moon()
     date = None
     while True:
         loc = Observer()

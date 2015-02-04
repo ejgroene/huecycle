@@ -1,4 +1,3 @@
-from requests import put, get
 from prototype import object
 from sensors import sensor, flag_sensor, status_sensor
 from rules import button_hit, flag_eq, status_eq, put_light, put_flag
@@ -8,11 +7,6 @@ BUTTON1 = 34
 BUTTON2 = 16
 BUTTON3 = 17
 BUTTON4 = 18
-
-def tap(url, n):
-    while True:
-        r = get(url + "/sensors/%d" % n).json
-        yield r["state"]["buttonevent"]
 
 @object
 def tap_control():
@@ -43,12 +37,12 @@ def tap_control():
         create_rule(BUTTON2, 2, 1, 127)
         create_rule(BUTTON2, 1, 0,  63)
 
-    def external_switch(self):
-        def turn_on(self, on):
+    def send(self, on=None, bri=None):
+        """Allow tap's state to be controlled externally."""
+        if on is not None:
             self.flag.state().send(flag=on)
-        def send(self, bri=0, **kwargs):
+        if bri is not None:
             self.status.state().send(status=max(0, bri - 32) // 64)
-        return self(turn_on, send)
 
     return locals()
 
@@ -67,12 +61,6 @@ def mockbridge(self):
 
 def find(source, name):
     return (o for o in source if o.name == name).next()
-
-@autotest
-def get_state():
-    t = tap(LOCAL_HUE_API, 2)
-    s = t.next()
-    assert s in (NOEVENT, BUTTON1, BUTTON2, BUTTON3, BUTTON4), s
 
 @autotest
 def TapControl():
@@ -126,36 +114,31 @@ def TapControl():
 def ExternalSwitch():
     tap = tap_control(bridge=b, id=2, lights=(object(id=1),))
     tap.init()
-    flag = tap.flag.id
-    switch = tap.external_switch()
-    assert switch
-    switch.turn_on(False)
-    assert (s for s in b.sensors() if s.id == flag).next().state["flag"] == False
-    switch.turn_on(True)
-    assert (s for s in b.sensors() if s.id == flag).next().state["flag"] == True
+    tap.send(on=False)
+    assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == False
+    tap.send(on=True)
+    assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == True
     
 @autotest
 def ExternalStatus():
     tap = tap_control(bridge=b, id=2, lights=(object(id=1),))
     tap.init()
-    switch = tap.external_switch()
-    switch.send(bri=0)
     def status():
         return (s for s in b.sensors() if s.id == tap.status.id).next()
     assert status().state["status"] == 0
-    switch.send(bri=95)
+    tap.send(bri=95)
     assert status().state["status"] == 0
-    switch.send(bri=96)
+    tap.send(bri=96)
     assert status().state["status"] == 1
-    switch.send(bri=159)
+    tap.send(bri=159)
     assert status().state["status"] == 1
-    switch.send(bri=160)
+    tap.send(bri=160)
     assert status().state["status"] == 2
-    switch.send(bri=223)
+    tap.send(bri=223)
     assert status().state["status"] == 2
-    switch.send(bri=224)
+    tap.send(bri=224)
     assert status().state["status"] == 3
-    switch.send(bri=255)
+    tap.send(bri=255)
     assert status().state["status"] == 3
 
 
@@ -174,4 +157,3 @@ def InvalidTapId():
         assert false
     except Exception as e:
         assert str(e) == "resource, /sensors/399, not available (/sensors/399)", str(e)
-

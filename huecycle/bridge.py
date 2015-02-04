@@ -15,7 +15,7 @@ def bridge():
     def update_state(self):
         self.update(self.info())
 
-    def send(self, part, **kwargs):
+    def send(self, part='', **kwargs):
         put(self.url() + part, **kwargs)
 
     def read(self, path):
@@ -41,9 +41,13 @@ def bridge():
     def lights(self):
         def path(self):
             return "/lights/%d" % self.id
-        def turn_on(self, on=True):
-            self.send("/state", on=on)
-        light = self(path, turn_on)
+        def get_state(self):
+            def path(self):
+                return self.up.path() + "/state"
+            return self(path, self.state)
+        def send(self, **kw):
+            self.up.send("/state", **kw)
+        light = self(path, get_state, send)
         for id, attrs in self.read("/lights").iteritems():
             yield light(id=int(id), **attrs)
 
@@ -63,8 +67,7 @@ def ConnectBridge():
 @autotest
 def GetSensors():
     b = bridge(baseurl=LOCAL_HUE_API)
-    sensor = b.sensors().next()
-    assert sensor.id == 1
+    sensor = (sensor for sensor in b.sensors() if sensor.name == "Daylight").next()
     assert sensor.name == "Daylight", sensor
     assert sensor.config.on == True
 
@@ -83,11 +86,13 @@ def GetLights():
     assert l1.id == 1, l1.id
     assert l1.name == "Bureaulamp"
     assert l1.modelid == "LCT001"
-    assert l1.state["on"] in (True, False)
-    l1.turn_on(False)
-    l1 = b.lights().next()
-    assert l1.state["on"] == False
-    l1.turn_on(True)
-    l1 = b.lights().next()
-    assert l1.state["on"] == True
-    
+    assert l1.path() == "/lights/%d" % l1.id
+
+    state = l1.get_state()
+    assert state.on in (True, False), state
+    assert state.path() == "/lights/%d/state" % l1.id, state.path()
+    state.send(on=False)
+    assert b.lights().next().state().on == False
+    state.send(on=True)
+    assert b.lights().next().state().on == True
+   

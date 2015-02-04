@@ -1,4 +1,3 @@
-from inspect import iscode
 from types import FunctionType, MethodType
 
 object_ = object # Yes, this module redefines the meaning of object
@@ -70,6 +69,8 @@ class object(object_):
         for arg in prototypes_or_functions:
             if isinstance(arg, object):
                 self.__prototypes__ += arg.__prototypes__
+            elif isinstance(arg, __self__): #TestMe
+                self.__prototypes__ += arg.__self__.__prototypes__
             elif isinstance(arg, FunctionType):
                 if arg.__code__.co_varnames[:1] == ('self',):
                     attributes[arg.__name__] = arg

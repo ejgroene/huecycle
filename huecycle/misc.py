@@ -1,6 +1,4 @@
 import rfc822
-from requests import put, get
-from json import dumps
 from clock import clock
 
 def autostart(f):
@@ -33,20 +31,6 @@ def interpolate(lo, hi, x, lo2, hi2):
     return lo2 + (float(x) - lo) * (hi2 - lo2) / (hi - lo)
 
 @autostart
-def lamp(url):
-    postfix = "/action" if "/groups/" in url else "/state"
-    while True:
-        kwargs = yield
-        if not kwargs:
-            yield get(url).json["state"]
-            continue
-        r = put(url + postfix, dumps(kwargs)).json
-        if not "success" in r[0]:
-            print r[0], kwargs
-            if r[0]["error"]["type"] == 201:  # lamps are off
-                continue
-
-@autostart
 def attenuator(light):
     ct, bri = 500, 0
     while True:
@@ -56,9 +40,6 @@ def attenuator(light):
         if "bri" in args:
             args["bri"] = bri = bri + (args["bri"] - bri) / 10
         light.send(args)
-
-def hours(t):
-    return t.hour + t.minute / 60. 
 
 
 from datetime import datetime, timedelta
@@ -122,26 +103,4 @@ def FindNextChangeWithClockSet():
     clock.set(t)
     g = list(find_next_change(src()))
     assert g == [(t,3), (t+timedelta(seconds=1),5), (t+timedelta(seconds=2),3), (t+timedelta(seconds=5),7)], g
-
-
-@autotest
-def TimeDiff():
-    from datetime import time
-    td = hours(time(4)) - hours(time(3))
-    assert td == 1., td
-    td = hours(time(5)) - hours(time(3))
-    assert td == 2.0, td
-    td = hours(time(4,15)) - hours(time(3))
-    assert td == 1.25, td
-    td = hours(time(4)) - hours(time(3,15))
-    assert td == 0.75, td
-    td = hours(time(3)) - hours(time(3,15))
-    assert td == -0.25, td
-
-@autotest
-def TestGetState():
-    from config import LOCAL_HUE_API
-    l = lamp(LOCAL_HUE_API + "/lights/1")
-    state = l.next()
-    assert state["on"] in (False, True), state
 

@@ -1,7 +1,6 @@
 from random import randint
-from datetime import time, datetime, timedelta, date
+from datetime import time, datetime
 from clock import clock
-from misc import autostart
 
 HOUR = 3600
 
@@ -17,12 +16,12 @@ def turn_on_between(members, t_ons, t_offs):
                 yield t_on
                 for light in members:
                     yield randint(1,60)
-                    light.turn_on(True)
+                    light.send(on=True)
             print "Next OFF:", t_off
             yield t_off
             for light in members:
                 yield randint(1,60)
-                light.turn_on(False)
+                light.send(on=False)
         else:
             yield HOUR
 
@@ -34,7 +33,7 @@ from autotest import autotest, any_number
 cmds = []
 @object
 def mocktarget():
-    def turn_on(self, on):
+    def send(self, on=None):
         cmds.append(on)
     def name(self):
         return "mock light"

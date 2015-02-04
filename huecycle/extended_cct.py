@@ -9,7 +9,7 @@ def extend_cct(lamp):
         See http://developers.meethue.com/coreconcepts.html for the color space, gammut and locus."""
     HUE_AT_1000K = 0     # follow the Planckian locus as close as possible towards the lower-right
     SAT_AT_1000K = 255
-    HUE_AT_1500K = 10500 # roughly where the Plackian locus exits Hue's gamut (y=0.4)
+    HUE_AT_1500K = 10500 # roughly where the Planckian locus exits Hue's gamut (y=0.4)
     SAT_AT_1500K = 255   # keep lowering hue until you get y=0.4 (and x=?), then get hue and sat
     HUE_AT_2000K = 12521 # set lamp to ct=1000000/2000, wait and get and sat hue from lamp
     SAT_AT_2000K = 225

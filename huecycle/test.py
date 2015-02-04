@@ -1,6 +1,15 @@
 #!/usr/bin/env python
-import sunphase
-import cycle
+import prototype
 import alarm
+import bridge
+import clock
 import controllers
+import extended_cct
+import misc
+import phase
+import rest
 import rules
+import sensors
+import sunphase
+import tap
+import cycle

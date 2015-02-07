@@ -34,6 +34,9 @@ class __self__(object_):
     def __getitem__(self, name):
         return self.__self__[name]
 
+    def __repr__(self):
+        return repr(self.__self__)
+
 class __defer__(object_):
 
     def __init__(self, __self__, __prototypes__):
@@ -69,7 +72,7 @@ class object(object_):
         for arg in prototypes_or_functions:
             if isinstance(arg, object):
                 self.__prototypes__ += arg.__prototypes__
-            elif isinstance(arg, __self__): #TestMe
+            elif isinstance(arg, __self__):
                 self.__prototypes__ += arg.__self__.__prototypes__
             elif isinstance(arg, FunctionType):
                 if arg.__code__.co_varnames[:1] == ('self',):
@@ -146,6 +149,18 @@ def UseTwoPrototypes():
     assert o6.f2() == "own f2"
     assert o6.f1() == "f1"
     
+@autotest
+def SelfAsPrototype():
+    def f(self):
+        return "f"
+    def g(self):
+        o1 = self()
+        o2 = object(self)
+        return o1, o2
+    o = object(f, g)
+    x, y = o.g()
+    assert x.f() == "f", x.f()
+    assert y.f() == "f", y.f()
 
 @autotest
 def CreateObject1():

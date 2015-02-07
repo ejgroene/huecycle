@@ -1,6 +1,9 @@
 from prototype import object
 from sensors import sensor, flag_sensor, status_sensor
 from rules import button_hit, flag_eq, status_eq, put_light, put_flag
+from datetime import datetime, timedelta
+from clock import clock
+from sunphase import MIREK
 
 NOEVENT = 00
 BUTTON1 = 34
@@ -19,30 +22,41 @@ def tap_control():
         self.status = status_sensor(baseurl=self.bridge.baseurl, name="tap-%s-status" % self.id)
         self.status.init()
         def put_lights(**kwargs):
-            return [put_light(light.id, **kwargs) for light in self.lights]
+            simplekw = kwargs.copy()
+            if "ct" in simplekw:
+                simplekw.pop("ct")
+            return [put_light(light.id, **(simplekw if "Dimmable" in light.type else kwargs)) for light in self.lights]
         def create_onoff_rule(name, btn, s0, s1):
             self.bridge.create_rule("tap-%s-%s" % (self.id, name),
                 button_hit(self.id, btn) + flag_eq(self.flag.id, s0),
                 put_lights(on=s1) + [put_flag(self.flag.id, flag=s1)])
         create_onoff_rule("on", BUTTON1, "false", True)
         create_onoff_rule("off", BUTTON1, "true", False)
-        def create_rule(btn, s0, s1, bri):
+        def create_rule(btn, s0, s1, bri, ct):
             self.bridge.create_rule("tap-%s-step-%d-%d" % (self.id, s0, s1),
                 button_hit(self.id, btn) + status_eq(self.status.id, str(s0)),
-                put_lights(bri=bri) + [put_flag(self.status.id, status=s1)])
-        create_rule(BUTTON4, 0, 1, 127)
-        create_rule(BUTTON4, 1, 2, 191)
-        create_rule(BUTTON4, 2, 3, 255)
-        create_rule(BUTTON2, 3, 2, 191)
-        create_rule(BUTTON2, 2, 1, 127)
-        create_rule(BUTTON2, 1, 0,  63)
+                put_lights(bri=bri, ct=ct) + [put_flag(self.status.id, status=s1)])
+        create_rule(BUTTON4, 0, 1, 127, MIREK/2700)
+        create_rule(BUTTON4, 1, 2, 191, MIREK/3400)
+        create_rule(BUTTON4, 2, 3, 255, MIREK/4100)
+        create_rule(BUTTON2, 3, 2, 191, MIREK/3400)
+        create_rule(BUTTON2, 2, 1, 127, MIREK/2700)
+        create_rule(BUTTON2, 1, 0,  63, MIREK/2000)
 
-    def send(self, on=None, bri=None):
-        """Allow tap's state to be controlled externally."""
-        if on is not None:
-            self.flag.state().send(flag=on)
-        if bri is not None:
-            self.status.state().send(status=max(0, bri - 32) // 64)
+    def manually_controlled_recently(self):
+        state = self._tap_sensor.info()["state"]
+        lastupdated = datetime.strptime(state["lastupdated"], "%Y-%m-%dT%H:%M:%S") # UTC, #FIXME
+        return state["buttonevent"] in [BUTTON2, BUTTON4] and lastupdated > clock.now() - timedelta(hours=6)
+
+    def send(self, **kw):
+        if self.manually_controlled_recently():
+            return
+        if "on" in kw:
+            self.flag.state().send(flag=kw["on"])
+        if "bri" in kw:
+            self.status.state().send(status=max(0, kw["bri"] - 32) // 64)
+        for light in self.lights:
+            light.send(**kw)
 
     return locals()
 
@@ -64,7 +78,7 @@ def find(source, name):
 
 @autotest
 def TapControl():
-    tap = tap_control(bridge=b, id=2, lights=(object(id=7),object(id=9)))
+    tap = tap_control(bridge=b, id=2, lights=(object(id=7, type="Dimmable"),object(id=9, type="Extended")))
     tap.init()
 
     flag = find(b.sensors(), "tap-2-flag")
@@ -95,24 +109,35 @@ def TapControl():
     assert off_rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
     assert off_rule["conditions"][2] == dict(address="/sensors/%s/state/flag" % flag.id, operator="eq", value="true")
 
-    def assert_step_rule(s0, s1, bri, btn):
+    def assert_step_rule(s0, s1, bri, ct, btn):
         rule = find(b.rules(), "tap-2-step-%d-%d" % (s0, s1))
         assert rule["conditions"][0] == dict(address="/sensors/2/state/buttonevent", operator="eq", value=str(btn))
         assert rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
         assert rule["conditions"][2] == dict(address="/sensors/%s/state/status" % status.id, operator="eq", value=str(s0)), rule
         assert rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(bri=bri)), rule
-        assert rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(bri=bri)), rule
+        assert rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(bri=bri,ct=ct)), rule
         assert rule["actions"][2] == dict(address="/sensors/%s/state" % status.id, method="PUT", body=dict(status=s1))
-    assert_step_rule(0, 1, 127, 18)
-    assert_step_rule(1, 2, 191, 18)
-    assert_step_rule(2, 3, 255, 18)
-    assert_step_rule(3, 2, 191, 16)
-    assert_step_rule(2, 1, 127, 16)
-    assert_step_rule(1, 0,  63, 16)
+    assert_step_rule(0, 1, 127, MIREK/2700, 18)
+    assert_step_rule(1, 2, 191, MIREK/3400, 18)
+    assert_step_rule(2, 3, 255, MIREK/4100, 18)
+    assert_step_rule(3, 2, 191, MIREK/3400, 16)
+    assert_step_rule(2, 1, 127, MIREK/2700, 16)
+    assert_step_rule(1, 0,  63, MIREK/2000, 16)
 
 @autotest
+def RecentlyControlledManually():
+    tap = tap_control(bridge=b, id=2, lights=(object(id=1,type="Dimmable"),))
+    tap.init()
+    clock.set(datetime(3000,12,31, 12, 00))
+    f = tap.manually_controlled_recently()
+    assert f == False, f
+    clock.set(datetime(2000,12,31, 12, 00))
+    f = tap.manually_controlled_recently()
+    assert f in (True, False),  f
+    
+@autotest
 def ExternalSwitch():
-    tap = tap_control(bridge=b, id=2, lights=(object(id=1),))
+    tap = tap_control(bridge=b, id=2, lights=(object(id=1, send=lambda self, **_: None,type="Dimmable"),))
     tap.init()
     tap.send(on=False)
     assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == False
@@ -121,7 +146,7 @@ def ExternalSwitch():
     
 @autotest
 def ExternalStatus():
-    tap = tap_control(bridge=b, id=2, lights=(object(id=1),))
+    tap = tap_control(bridge=b, id=2, lights=(object(id=1, send=lambda self, **_: None,type="Dimmable"),))
     tap.init()
     def status():
         return (s for s in b.sensors() if s.id == tap.status.id).next()
@@ -140,8 +165,6 @@ def ExternalStatus():
     assert status().state["status"] == 3
     tap.send(bri=255)
     assert status().state["status"] == 3
-
-
 
 @autotest
 def InvalidTapId():

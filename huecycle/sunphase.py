@@ -57,6 +57,17 @@ def location():
         t_dawn_begin, t_dusk_end = self.dawn_and_dusk().send(time)
         t_dawn_end, t_dusk_begin = self.twilight_zones().send(time)
         return t_dawn_begin, t_dawn_end, t_dusk_begin, t_dusk_end
+    @autostart
+    def ct_cycle(self, t_wake, t_sleep):
+        t = yield
+        while True:
+            t_dawn_begin, _, _, t_dusk_end = self.twilights()
+            ct_phase = get_ct_phase(t_wake, t_sleep, t_dawn_begin.time(), t_dusk_end.time(), t)
+            try:
+                while True:
+                    t = yield ct_phase.send(t)
+            except StopIteration:
+                pass
     return locals()
 
 from autotest import autotest
@@ -127,6 +138,7 @@ CCT_RED_SUN = MIREK/1000
 CCT_DEEP_NIGHT = MIREK/10000
 
 def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
+    if isinstance(t, datetime): t = t.time()
     t_dawn_end = min(t_wake, t_rise)
     t_dusk_begin = max(t_sleep, t_set)
     t_dawn_begin = t_dawn_end.replace(hour=t_dawn_end.hour - 1)
@@ -144,7 +156,6 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
     if t_dusk_end <= t < time.max or time.min <= t < t_dawn_begin:
         return phase(t_dusk_end, t_dawn_begin, sinus(), CCT_RED_SUN, CCT_DEEP_NIGHT)
     raise Exception("Cannot match cycle: %s" % t)
-
 
 def summer_phase(t):
     return get_ct_phase(time(7), time(21), time(6), time(22), t)
@@ -249,4 +260,68 @@ def winter_night():
     assert ct ==  100, ct
     ct = winter_phase(time(05,59)).send(time(05,59))
     assert ct ==  994, ct
+
+@autotest
+def YearRound():
+    ede = location(lat=52, lon=5.6)
+    ctc = ede.ct_cycle(time(7), time(22))
+    def assert_ct(Y, M, D, h, m, ct_soll):
+        ct = ctc.send(time(h,m)) # you can send the current time...
+        assert ct == MIREK/ct_soll, MIREK/ct
+        clock.set(datetime(Y, M, D, h, m)) # or set the global clock.
+        ct = ctc.next()
+        assert ct == MIREK/ct_soll, MIREK/ct
+    assert_ct(2000,6,21, 14,00, 5405)
+    assert_ct(2000,6,21, 15,00, 5319)
+    assert_ct(2000,6,21, 16,00, 5181)
+    assert_ct(2000,6,21, 17,00, 4926)
+    assert_ct(2000,6,21, 18,00, 4566)
+    assert_ct(2000,6,21, 19,00, 4132)
+    assert_ct(2000,6,21, 20,00, 3610)
+    assert_ct(2000,6,21, 21,00, 3039)
+    assert_ct(2000,6,21, 22,00, 2475)
+    assert_ct(2000,6,21, 23,00, 1831)
+
+    assert_ct(2000,6,22, 00,01, 1096)
+    assert_ct(2000,6,22, 01,00, 3952)
+    assert_ct(2000,6,22, 02,00, 7042)
+    assert_ct(2000,6,22, 02,10, 5235)
+    assert_ct(2000,6,22, 02,20, 3861)
+    assert_ct(2000,6,22, 02,30, 2915)
+    assert_ct(2000,6,22, 03,00, 1481)
+    assert_ct(2000,6,22, 04,00, 1410)
+    assert_ct(2000,6,22, 05,00, 2298)
+    assert_ct(2000,6,22, 06,00, 2857)
+    assert_ct(2000,6,22, 07,00, 3436)
+    assert_ct(2000,6,22,  8,00, 3968)
+    assert_ct(2000,6,22,  9,00, 4444)
+    assert_ct(2000,6,22, 10,00, 4830)
+    assert_ct(2000,6,22, 11,00, 5102)
+    assert_ct(2000,6,22, 12,00, 5291)
+    assert_ct(2000,12,21, 14,00, 5405)
+    assert_ct(2000,12,21, 15,00, 5319)
+    assert_ct(2000,12,21, 16,00, 5181)
+    assert_ct(2000,12,21, 17,00, 4926)
+    assert_ct(2000,12,21, 18,00, 4566)
+    assert_ct(2000,12,21, 19,00, 4132)
+    assert_ct(2000,12,21, 20,00, 3610)
+    assert_ct(2000,12,21, 21,00, 3048)
+    assert_ct(2000,12,21, 22,00, 2475)
+    assert_ct(2000,12,21, 23,00, 1000)
+    assert_ct(2000,12,22, 00,01, 1658)
+    assert_ct(2000,12,22, 01,00, 3378)
+    assert_ct(2000,12,22, 02,00, 8130)
+    assert_ct(2000,12,22, 02,10, 9090)
+    assert_ct(2000,12,22, 02,20, 9708)
+    assert_ct(2000,12,22, 02,30, 10000)
+    assert_ct(2000,12,22, 03,00, 8130)
+    assert_ct(2000,12,22, 04,00, 3378)
+    assert_ct(2000,12,22, 05,00, 1639)
+    assert_ct(2000,12,22, 06,00, 1000)
+    assert_ct(2000,12,22, 07,00, 2000)
+    assert_ct(2000,12,22,  8,00, 2000)
+    assert_ct(2000,12,22,  9,00, 3095)
+    assert_ct(2000,12,22, 10,00, 4184)
+    assert_ct(2000,12,22, 11,00, 4950)
+    assert_ct(2000,12,22, 12,00, 5347)
 

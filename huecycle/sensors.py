@@ -1,10 +1,11 @@
 from rest import get, post, put, delete
 from prototype import object
 
-def delete_all_sensors():
-    sensors = get(LOCAL_HUE_API + "/sensors")
+def delete_all_sensors(api):
+    sensors = get(api + "/sensors")
     for k, v in ((k, v) for k, v in sensors.iteritems() if v["manufacturername"] == "ErikGroeneveld"):
-        delete(LOCAL_HUE_API + "/sensors/%s" % k)
+        print "Deleting sensor", k
+        delete(api + "/sensors/%s" % k)
 
 @object
 def sensor():
@@ -71,20 +72,6 @@ def ReadTap():
     assert "buttonevent" in state
 
 @autotest
-def ReadAndWriteConfig():
-    tap1 = tap(id=2)
-    tap1.baseurl = LOCAL_HUE_API
-    config = tap1.config()
-    assert "on" in config
-    assert config.on in (True, False)
-    config.set(False)
-    config = tap1.config()
-    assert config.on == False
-    config.set(True)
-    config = tap1.config()
-    assert config.on == True
-
-@autotest
 def ToggleFlagSensor():
     flag1 = flag_sensor(baseurl=LOCAL_HUE_API, name="testflag")
     flag1.init()
@@ -117,4 +104,4 @@ def CreateAndSetStatusSensor():
 
 @autotest
 def DeleteAllSensors():
-    delete_all_sensors()
+    delete_all_sensors(LOCAL_HUE_API)

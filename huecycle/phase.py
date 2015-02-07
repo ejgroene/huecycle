@@ -1,6 +1,7 @@
 from misc import autostart, autotest
 from datetime import datetime, time
 from math import sin, exp, pi
+from clock import clock
 
 def datetime2hours(dt):
     return dt.hour + dt.minute / 60. + dt.second / 3600.
@@ -17,7 +18,7 @@ def phase(d0, d1, curve, r0, r1):
     t = yield
     while True:
         if t is None:
-            t = datetime.now()
+            t = clock.now()
         h = t.hour + t.minute / 60. + t.second / 3600.
         if h < d0:
             h += 24.

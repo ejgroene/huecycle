@@ -36,11 +36,11 @@ def tap_control():
             self.bridge.create_rule("tap-%s-step-%d-%d" % (self.id, s0, s1),
                 button_hit(self.id, btn) + status_eq(self.status.id, str(s0)),
                 put_lights(bri=bri, ct=ct) + [put_flag(self.status.id, status=s1)])
-        create_rule(BUTTON4, 0, 1, 127, MIREK/2700)
-        create_rule(BUTTON4, 1, 2, 191, MIREK/3400)
-        create_rule(BUTTON4, 2, 3, 255, MIREK/4100)
-        create_rule(BUTTON2, 3, 2, 191, MIREK/3400)
-        create_rule(BUTTON2, 2, 1, 127, MIREK/2700)
+        create_rule(BUTTON4, 0, 1, 127, MIREK/2600)
+        create_rule(BUTTON4, 1, 2, 191, MIREK/3200)
+        create_rule(BUTTON4, 2, 3, 255, MIREK/3800)
+        create_rule(BUTTON2, 3, 2, 191, MIREK/3200)
+        create_rule(BUTTON2, 2, 1, 127, MIREK/2600)
         create_rule(BUTTON2, 1, 0,  63, MIREK/2000)
 
     def manually_controlled_recently(self):
@@ -117,11 +117,11 @@ def TapControl():
         assert rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(bri=bri)), rule
         assert rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(bri=bri,ct=ct)), rule
         assert rule["actions"][2] == dict(address="/sensors/%s/state" % status.id, method="PUT", body=dict(status=s1))
-    assert_step_rule(0, 1, 127, MIREK/2700, 18)
-    assert_step_rule(1, 2, 191, MIREK/3400, 18)
-    assert_step_rule(2, 3, 255, MIREK/4100, 18)
-    assert_step_rule(3, 2, 191, MIREK/3400, 16)
-    assert_step_rule(2, 1, 127, MIREK/2700, 16)
+    assert_step_rule(0, 1, 127, MIREK/2600, 18)
+    assert_step_rule(1, 2, 191, MIREK/3200, 18)
+    assert_step_rule(2, 3, 255, MIREK/3800, 18)
+    assert_step_rule(3, 2, 191, MIREK/3200, 16)
+    assert_step_rule(2, 1, 127, MIREK/2600, 16)
     assert_step_rule(1, 0,  63, MIREK/2000, 16)
 
 @autotest

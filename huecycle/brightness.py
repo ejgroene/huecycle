@@ -7,7 +7,7 @@ from misc import autostart
 def brightness_cycle(t_wake, t_sleep, f):
     t = yield
     while True:
-        p = phase(t_wake, t_sleep, f, 0, 255)
+        p = phase(t_wake(), t_sleep(), f, 0, 255)
         try:
             while True:
                 t = yield p.send(t)
@@ -20,7 +20,7 @@ from autotest import autotest
 
 @autotest
 def CreateCycle():
-    bri = brightness_cycle(time(7), time(23), sinus())
+    bri = brightness_cycle(lambda: time(7), lambda: time(23), sinus())
 
     b = bri.send(time(15,00))
     assert b == 255

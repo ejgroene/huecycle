@@ -21,6 +21,7 @@ def tap_control():
         self.flag.init()
         self.status = status_sensor(baseurl=self.bridge.baseurl, name="tap-%s-status" % self.id)
         self.status.init()
+        self.status_state = self.status.state()
         def put_lights(**kwargs):
             simplekw = kwargs.copy()
             if "ct" in simplekw:
@@ -53,10 +54,13 @@ def tap_control():
             return
         if "on" in kw:
             self.flag.state().send(flag=kw["on"])
+        #if self.is_off() #TODO
+        #    return
         if "bri" in kw:
-            self.status.state().send(status=max(0, kw["bri"] - 32) // 64)
+            self.status_state.send(status=max(0, kw["bri"] - 32) // 64)
         for light in self.lights:
             light.send(**kw)
+
 
     return locals()
 

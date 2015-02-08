@@ -1,11 +1,30 @@
 import requests
 from json import dumps
+from time import sleep, time
 
 IGNORED_ERRORS = (201,)
 
-def go(method, *args, **kwargs):
-    r = method(*args, **kwargs)
+total_reqs = 0
+start_time = time()
+
+def try_forever(method, *args, **kwargs):
+    global total_reqs
+    total_reqs += 1
+    if total_reqs % 100 == 0:
+        print " * requests/second:", total_reqs / (time() - start_time)
+    r = None
+    while r is None:
+        # Hue is so unreliable, we just keep trying....
+        try:
+            r = method(*args, **kwargs)
+        except requests.exceptions.RequestException as e:
+            print e, args, kwargs
+            sleep(5)
     assert r.status_code == 200, r
+    return r
+
+def go(method, *args, **kwargs):
+    r = try_forever(method, *args, **kwargs)
     if len(r.json) >= 1:
         response = r.json[0]
         return check_status(response)
@@ -31,23 +50,6 @@ def put(url, **kwargs):
     return go(requests.put, url, dumps(kwargs))
 
 def get(url):
-    r = requests.get(url)
-    assert r.status_code == 200, r
+    r = try_forever(requests.get, url)
     return check_status(r.json)
 
-from misc import autotest
-
-@autotest
-def InvalidURL():
-    try:
-        post("http:/niks.niet", a=2)
-        assert False
-    except Exception as e:
-        assert str(e) == "HTTPConnectionPool(host='', port=80): Max retries exceeded with url: /niks.niet", e
-
-@autotest
-def IgnoreDeviceOff():
-    from config import LOCAL_HUE_API
-    put(LOCAL_HUE_API + "/lights/1/state", on=False)
-    put(LOCAL_HUE_API + "/lights/1/state", bri=100)
-    put(LOCAL_HUE_API + "/lights/1/state", on=True)

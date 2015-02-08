@@ -1,5 +1,6 @@
 from prototype import object
-from rest import get, put, post
+from rest import get, put, post, delete
+from extended_cct import extend_cct
 
 @object
 def bridge():
@@ -14,6 +15,7 @@ def bridge():
         return get(self.url())
 
     def send(self, subpath='', **kwargs):
+        # ignore connection errors here? #TODO
         put(self.url() + subpath, **kwargs)
 
     def create_rule(self, name, conditions, actions):
@@ -44,6 +46,9 @@ def bridge():
             def send(self, **kw):
                 if self.type == "Dimmable light":
                     "ct" in kw and kw.pop("ct")
+                if not kw: #TESTME
+                    return
+                kw = extend_cct(**kw)
                 self.up.send("/state", **kw),
             light = lights(
                 path=lambda self:
@@ -59,10 +64,22 @@ def bridge():
             )
             yield light
 
+    def delete_all_scenes(self):
+        scenes = self(path=lambda self: self.up.path() + "/scenes")
+        for id in scenes.read().keys():
+            print "Deleting scene:", id
+            # scene cannot be deleted, they are GC'ed
+            #delete(scenes.url() + "/%s" % id)
+
     return locals()
 
 from autotest import autotest
 from config import LOCAL_HUE_API
+
+@autotest
+def DeleteScenes():
+    b = bridge(baseurl=LOCAL_HUE_API)
+    b.delete_all_scenes()
 
 @autotest
 def ConnectBridge():
@@ -99,7 +116,7 @@ def GetLights():
     assert lights
     l1 = lights.next()
     assert l1.id == 1, l1.id
-    assert l1.name == "Studeerkamer-buro"
+    assert l1.name == "Studeerkamer-buro (test)"
     assert l1.modelid == "LCT001"
     assert l1.path() == "/lights/%d" % l1.id, l1.path()
 
@@ -117,3 +134,17 @@ def GetLightsByName():
     lights = b.lights("keuke")
     names = [l.name for l in lights]
     assert names == ["Keuken-tafel", "Keuken-aanrecht"], names
+
+@autotest
+def ExtendedCCT():
+    b = bridge(baseurl=LOCAL_HUE_API)
+    light = b.lights("test").next()
+    light.send(ct=10000)
+    light = b.lights("test").next()
+    assert light.state["hue"] == 46920, light.state["hue"]
+    assert light.state["sat"] == 254, light.state["sat"]
+
+    light.send(ct=1000)
+    light = b.lights("test").next()
+    assert light.state["hue"] == 0, light.state["hue"]
+    assert light.state["sat"] == 254, light.state["sat"]

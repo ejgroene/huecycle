@@ -40,6 +40,10 @@ from misc import autotest
 from config import LOCAL_HUE_API
 
 @autotest
+def DeleteAllRules():
+    delete_all_rules(LOCAL_HUE_API)
+
+@autotest
 def InvalidRuleConditions():
     try:
         create_rule(LOCAL_HUE_API, "--test--", [], [put_body("/lights/1/state", v=1)])

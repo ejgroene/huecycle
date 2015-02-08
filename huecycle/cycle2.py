@@ -37,23 +37,21 @@ tap_woonkamer.init()
 lights_all = tuple(local_bridge.lights("studeer")) + (tap_keuken, tap_woonkamer)
 
 def bed_time():
-    return time(23 if clock.date().weekday() in (4, 5) else 22, 45)
+    t = clock.nexttime(time(22,30))
+    if t.weekday() in (4, 5):
+        t+= timedelta(minutes=29) #FIXME later than 22h59 won't work
+    return t.time()
 
 def wake_time():
-    return time( 8 if clock.date().weekday() in (5, 6) else  7, 15)
+    t = clock.nexttime(time(7,15))
+    if t.weekday() in (5, 6):
+        t+= timedelta(hours=1)
+    return t.time()
 
 ede = location(lat=52.053055, lon=5.638889)
 
-alarm(
-    turn_on_between(lights_all, wake_time     , ede.dawn_end),
-    turn_on_between(lights_all, ede.dusk_begin, bed_time    ),
-    )
-
-t_wake = time(7,15) #TODO make use of bed_time/wake_time
-t_sleep = time(22,15)
-
-bri_cycle = find_next_change(brightness_cycle(t_wake, t_sleep, sinus(charge(BRI_SINUS_CHARGE))))
-ct_cycle = find_next_change(ede.ct_cycle(t_wake, t_sleep))
+bri_cycle = find_next_change(brightness_cycle(wake_time, bed_time, sinus(charge(BRI_SINUS_CHARGE))))
+ct_cycle = find_next_change(ede.ct_cycle(wake_time, bed_time))
 
 def process_events(lights, events, attr):
     while True:
@@ -65,6 +63,8 @@ def process_events(lights, events, attr):
             light.send(**{attr:v})
 
 alarm(
+    turn_on_between(lights_all, wake_time     , ede.dawn_end),
+    turn_on_between(lights_all, ede.dusk_begin, bed_time    ),
     process_events(lights_all, bri_cycle, 'bri'),
     process_events(lights_all, ct_cycle, 'ct')
     )

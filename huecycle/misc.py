@@ -43,13 +43,15 @@ def attenuator(light):
 
 
 from datetime import datetime, timedelta
-def find_next_change(g):
+def find_next_change(g, timeout=30):
     t = clock.now()
     v = g.send(t)
     while True:
         yield t, v
         prev = v
-        while v == prev:
+        dt = 0
+        while v == prev and dt < timeout:
+            dt += 1
             t += timedelta(seconds=1)
             v = g.send(t)
 
@@ -104,3 +106,14 @@ def FindNextChangeWithClockSet():
     g = list(find_next_change(src()))
     assert g == [(t,3), (t+timedelta(seconds=1),5), (t+timedelta(seconds=2),3), (t+timedelta(seconds=5),7)], g
 
+@autotest
+def FindNextChangeTimeout():
+    @autostart
+    def src():
+        for _ in range(6): # 6 secs the same
+            yield 3
+        yield 5
+    t = datetime(2020, 1, 1, 12, 00)
+    clock.set(t)
+    g = list(find_next_change(src(), timeout=2))
+    assert g == [(t,3), (t+timedelta(seconds=2),3), (t+timedelta(seconds=4),3), (t+timedelta(seconds=5),5)], g

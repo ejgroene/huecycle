@@ -10,6 +10,7 @@ def turn_on_between(members, t_ons, t_offs):
         t_off = t_offs()
         if isinstance(t_on, datetime): t_on = t_on.time()
         if isinstance(t_off, datetime): t_off = t_off.time()
+        # Ignore conection errors here? #TODO
         if t_on < t_off:
             if not t_on < clock.time() < t_off:
                 print "Next ON:", t_on

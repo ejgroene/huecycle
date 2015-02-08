@@ -62,7 +62,7 @@ def location():
         t = yield
         while True:
             t_dawn_begin, _, _, t_dusk_end = self.twilights()
-            ct_phase = get_ct_phase(t_wake, t_sleep, t_dawn_begin.time(), t_dusk_end.time(), t)
+            ct_phase = get_ct_phase(t_wake(), t_sleep(), t_dawn_begin.time(), t_dusk_end.time(), t)
             try:
                 while True:
                     t = yield ct_phase.send(t)
@@ -142,7 +142,7 @@ def get_ct_phase(t_wake, t_sleep, t_rise, t_set, t):
     t_dawn_end = min(t_wake, t_rise)
     t_dusk_begin = max(t_sleep, t_set)
     t_dawn_begin = t_dawn_end.replace(hour=t_dawn_end.hour - 1)
-    t_dusk_end = t_dusk_begin.replace(hour=t_dusk_begin.hour + 1)
+    t_dusk_end = t_dusk_begin.replace(hour=t_dusk_begin.hour + 1) #TODO use datetime for proper rollover
     if t_rise <= t < t_set:
         return phase(t_rise, t_set, sinus(charge(2.)), CCT_SUN_RISE, CCT_AVG_SUMMER_SUNLIGHT)
     if t_wake <= t < t_rise:
@@ -264,7 +264,7 @@ def winter_night():
 @autotest
 def YearRound():
     ede = location(lat=52, lon=5.6)
-    ctc = ede.ct_cycle(time(7), time(22))
+    ctc = ede.ct_cycle(lambda: time(7), lambda: time(22))
     def assert_ct(Y, M, D, h, m, ct_soll):
         ct = ctc.send(time(h,m)) # you can send the current time...
         assert ct == MIREK/ct_soll, MIREK/ct

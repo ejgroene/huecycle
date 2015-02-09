@@ -34,7 +34,8 @@ tap_keuken.init()
 tap_woonkamer = tap_control(bridge=local_bridge, id=s2.id, lights=tuple(local_bridge.lights("woonkamer")))
 tap_woonkamer.init()
 
-lights_all = tuple(local_bridge.lights("studeer")) + (tap_keuken, tap_woonkamer)
+light_studeer = (local_bridge.lights("studeer")).next()
+lights_all = (light_studeer, tap_keuken, tap_woonkamer)
 
 def bed_time():
     t = clock.nexttime(time(22,30))
@@ -63,8 +64,8 @@ def process_events(lights, events, attr):
             light.send(**{attr:v})
 
 alarm(
-    turn_on_between(lights_all, wake_time     , ede.dawn_end),
-    turn_on_between(lights_all, ede.dusk_begin, bed_time    ),
+    turn_on_between((light_studeer, tap_keuken), wake_time, ede.dawn_end), #TODO remove woonkamer
+    turn_on_between(lights_all, ede.dusk_begin, bed_time),
     process_events(lights_all, bri_cycle, 'bri'),
     process_events(lights_all, ct_cycle, 'ct')
     )

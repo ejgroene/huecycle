@@ -21,6 +21,15 @@ def bridge():
     def create_rule(self, name, conditions, actions):
         return int(post(self.baseurl + "/rules", name=name, conditions=conditions, actions=actions)["id"])
 
+    def create_group(self, name, light_ids):
+        return post(self.baseurl + "/groups", name=name, lights=[str(i) for i in light_ids])
+
+    def delete_groups(self, name=''):
+        for group in self.groups():
+            if name.lower() in group.name.lower():
+                print "Deleting group", group.name
+                delete(group.url())
+
     def sensors(self):
         sensors = self(path=lambda self: self.up.path() + "/sensors")
         for id, attrs in sensors.read().iteritems():
@@ -28,6 +37,11 @@ def bridge():
 
     def sensor(self, name):
         return (s for s in self.sensors() if name.lower() in s.name.lower()).next()
+
+    def groups(self):
+        grps = self(path=lambda self: self.up.path() + "/groups")
+        for id, attrs in grps.read().iteritems():
+            yield grps(id=id, path=lambda self: self.up.path() + "/%s" % self.id, **attrs)
 
     def rules(self):
         @self
@@ -148,3 +162,17 @@ def ExtendedCCT():
     light = b.lights("test").next()
     assert light.state["hue"] == 0, light.state["hue"]
     assert light.state["sat"] == 254, light.state["sat"]
+
+@autotest
+def FindGroups():
+    b = bridge(baseurl=LOCAL_HUE_API)
+    b.delete_groups()
+    groups = list(b.groups())
+    assert groups == [], groups
+    b.create_group("test-name", [1,3,5])
+    group = (b.groups()).next()
+    assert group.name == "test-name", group
+    assert group.type == "LightGroup", group
+    assert group.lights == ['1', '3', '5'], group
+
+    

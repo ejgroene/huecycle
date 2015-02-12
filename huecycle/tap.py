@@ -19,9 +19,11 @@ def tap_control():
         assert self._tap_sensor.info()["type"] == "ZGPSwitch", "Sensor %s is not a Tap." % self.id
         self.flag = flag_sensor(baseurl=self.bridge.baseurl, name="tap-%s-flag" % self.id)
         self.flag.init()
+        self.on = True #TODO read group status
         self.status = status_sensor(baseurl=self.bridge.baseurl, name="tap-%s-status" % self.id)
         self.status.init()
         self.status_state = self.status.state()
+        self.bridge.create_group("tap-%s-group" % self.id, [light.id for light in self.lights])
         def put_lights(**kwargs):
             simplekw = kwargs.copy()
             if "ct" in simplekw:
@@ -53,13 +55,16 @@ def tap_control():
         if self.manually_controlled_recently():
             return
         if "on" in kw:
-            self.flag.state().send(flag=kw["on"])
-        #if self.is_off() #TODO
-        #    return
+            self.on = kw['on']
+            self.flag.state().send(flag=self.on)
+        if not self.on:
+            kw.pop("bri", None)
+            kw.pop("ct", None)
         if "bri" in kw:
             self.status_state.send(status=max(0, kw["bri"] - 32) // 64)
-        for light in self.lights:
-            light.send(**kw)
+        if kw:
+            for light in self.lights:
+                light.send(**kw)
 
 
     return locals()
@@ -80,10 +85,15 @@ def mockbridge(self):
 def find(source, name):
     return (o for o in source if o.name == name).next()
 
+
 @autotest
-def TapControl():
-    tap = tap_control(bridge=b, id=2, lights=(object(id=7, type="Dimmable"),object(id=9, type="Extended")))
+def TapControlRules():
+    tap = tap_control(bridge=b, id=2, lights=(object(id=3, type="Dimmable"),object(id=5, type="Extended")))
     tap.init()
+
+    group = find(b.groups(), "tap-2-group")
+    assert group
+    assert group.lights == ['3', '5'], group
 
     flag = find(b.sensors(), "tap-2-flag")
     assert flag["type"] == "CLIPGenericFlag"
@@ -97,8 +107,8 @@ def TapControl():
 
     on_rule = find(b.rules(), "tap-%s-on" % 2)
     assert on_rule["name"] == "tap-2-on"
-    assert on_rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(on=True))
-    assert on_rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(on=True))
+    assert on_rule["actions"][0] == dict(address="/lights/3/state", method="PUT", body=dict(on=True))
+    assert on_rule["actions"][1] == dict(address="/lights/5/state", method="PUT", body=dict(on=True))
     assert on_rule["actions"][2] == dict(address="/sensors/%s/state" % flag.id, method="PUT", body=dict(flag=True))
     assert on_rule["conditions"][0] == dict(address="/sensors/2/state/buttonevent", operator="eq", value="34")
     assert on_rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
@@ -106,8 +116,8 @@ def TapControl():
 
     off_rule = find(b.rules(), "tap-%s-off" % 2)
     assert off_rule["name"] == "tap-2-off"
-    assert off_rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(on=False))
-    assert off_rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(on=False))
+    assert off_rule["actions"][0] == dict(address="/lights/3/state", method="PUT", body=dict(on=False))
+    assert off_rule["actions"][1] == dict(address="/lights/5/state", method="PUT", body=dict(on=False))
     assert off_rule["actions"][2] == dict(address="/sensors/%s/state" % flag.id, method="PUT", body=dict(flag=False))
     assert off_rule["conditions"][0] == dict(address="/sensors/2/state/buttonevent", operator="eq", value="34")
     assert off_rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
@@ -118,8 +128,8 @@ def TapControl():
         assert rule["conditions"][0] == dict(address="/sensors/2/state/buttonevent", operator="eq", value=str(btn))
         assert rule["conditions"][1] == dict(address="/sensors/2/state/lastupdated", operator="dx")
         assert rule["conditions"][2] == dict(address="/sensors/%s/state/status" % status.id, operator="eq", value=str(s0)), rule
-        assert rule["actions"][0] == dict(address="/lights/7/state", method="PUT", body=dict(bri=bri)), rule
-        assert rule["actions"][1] == dict(address="/lights/9/state", method="PUT", body=dict(bri=bri,ct=ct)), rule
+        assert rule["actions"][0] == dict(address="/lights/3/state", method="PUT", body=dict(bri=bri)), rule
+        assert rule["actions"][1] == dict(address="/lights/5/state", method="PUT", body=dict(bri=bri,ct=ct)), rule
         assert rule["actions"][2] == dict(address="/sensors/%s/state" % status.id, method="PUT", body=dict(status=s1))
     assert_step_rule(0, 1, 127, MIREK/2600, 18)
     assert_step_rule(1, 2, 191, MIREK/3200, 18)
@@ -141,12 +151,28 @@ def RecentlyControlledManually():
     
 @autotest
 def ExternalSwitch():
-    tap = tap_control(bridge=b, id=2, lights=(object(id=1, send=lambda self, **_: None,type="Dimmable"),))
+    cmds = []
+    def send(self, *args, **kwargs):
+        cmds.append((args, kwargs))
+    mocklight = object(send, id=1, type="Dimmable")
+    tap = tap_control(bridge=b, id=2, lights=(mocklight,))
     tap.init()
+
+    tap.send(on=True)
+    assert cmds[-1] == ((), {'on':True}), cmds
+    assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == True
+    tap.send(bri=200)
+    assert cmds[-1] == ((), {'bri':200}), cmds
+
     tap.send(on=False)
     assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == False
-    tap.send(on=True)
-    assert (s for s in b.sensors() if s.id == tap.flag.id).next().state["flag"] == True
+    assert cmds[-1] == ((), {'on':False}), cmds
+
+    cmds = []
+    tap.send(ct=100)
+    tap.send(bri=200)
+    assert cmds == [], cmds
+
     
 @autotest
 def ExternalStatus():

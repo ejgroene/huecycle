@@ -25,6 +25,7 @@ delete_all_rules(LOCAL_HUE_API)
 delete_all_sensors(LOCAL_HUE_API)
 
 local_bridge = bridge(baseurl=LOCAL_HUE_API)
+local_bridge.delete_groups()
 
 s1 = local_bridge.sensor("keuken")
 s2 = local_bridge.sensor("woonkamer")

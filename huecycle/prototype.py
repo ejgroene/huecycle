@@ -1,4 +1,5 @@
-from types import FunctionType, MethodType
+from types import FunctionType, MethodType, ClassType
+from inspect import isbuiltin, isclass
 
 object_ = object # Yes, this module redefines the meaning of object
 
@@ -70,19 +71,30 @@ class object(object_):
     def __init__(self, *prototypes_or_functions, **attributes):
         self.__prototypes__ = (self,)
         for arg in prototypes_or_functions:
+            # delegate to given object
             if isinstance(arg, object):
                 self.__prototypes__ += arg.__prototypes__
+            # delegate to given object via self
             elif isinstance(arg, __self__):
                 self.__prototypes__ += arg.__self__.__prototypes__
             elif isinstance(arg, FunctionType):
+                # add given function as attribute (method)
                 if arg.__code__.co_varnames[:1] == ('self',):
                     attributes[arg.__name__] = arg
+                # use given function as factory for attributes
                 elif arg.__code__.co_argcount == 0:
                     attributes.update(arg())
                 else:
                     raise Exception("function '%s' must accept no args or first arg must be 'self'" % arg.__name__)
+            # use given old style Python class as source for attributes
+            elif isinstance(arg, ClassType):
+                attributes = arg.__dict__
+            # delegate to new style Python class or object
+            elif isinstance(arg, type) or \
+                    isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
+                self.__prototypes__ += (arg,)
             else:
-                raise Exception("arg '%s' must be a constructor, prototype or method" % arg)
+                raise Exception("arg '%s' must be a constructor, prototype, function or class" % arg)
         self.__dict__.update(attributes)
            
     def __call__(self, *prototypes_or_functions, **attributes):
@@ -122,7 +134,7 @@ def CheckFunctions():
         object('10')
         assert False
     except Exception as e:
-        assert str(e) == "arg '10' must be a constructor, prototype or method", e
+        assert str(e) == "arg '10' must be a constructor, prototype, function or class", e
 
 
 @autotest
@@ -218,18 +230,61 @@ def This():
     assert Obj2.g() == 48, Obj2.g()
 
 @autotest
+def CreateFromOldStyleClass():
+    @object
+    class obj: # strange but convenient syntax?
+        a = 42
+        def f(self):
+            return 54
+    assert obj.a == 42
+    assert obj.f() == 54
+
+@autotest
+def DelegateToNormalPythonClass():
+    class A(object_):
+        c = 10
+        def f(self):
+            return 42
+        def g(self):
+            return self.b # Oh yeah!
+    assert isinstance(A, type)
+    o = object(A, b=67)
+    assert o.f() == 42
+    assert o.b == 67
+    assert o.g() == 67
+    assert o.c == 10
+
+@autotest
+def DelegateToNormalPythonInstance():
+    class A(object_):
+        c = 16
+        def f(self):
+            return 23
+        def g(self):
+            return self.d
+    a = A()
+    a.d = 8
+    assert isinstance(a, object_)
+    o = object(a)
+    assert o.f() == 23
+    assert o.c == 16
+    assert o.d == 8
+    assert o.g() == 8
+
+@autotest
 def CreateObjectFromPrototype():
     creature = object(alive=True)
     @creature
-    def person():
+    class person():
         def age(self): return 2015 - self.birth
-        return locals()
     me = object(person, birth=1990)
     assert me.age() == 25, me
     assert me.alive == True
     me.alive = False
     assert me.alive == False
     assert creature.alive == True
+    her = person(birth=1994) # nicer syntax
+    assert her.age() == 21
 
 @autotest
 def FindPrototypes():

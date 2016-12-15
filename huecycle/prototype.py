@@ -3,6 +3,18 @@ from inspect import isbuiltin, isclass
 
 object_ = object # Yes, this module redefines the meaning of object
 
+def find_attr(self, prototypes, name):
+    for prototype in prototypes:
+        try:
+            attribute = object_.__getattribute__(prototype, name)
+        except AttributeError:
+            continue
+        if isinstance(attribute, FunctionType):
+            return  MethodType(attribute, __self__(self, prototype))
+        if isinstance(attribute, dict):
+            return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+        return attribute
+
 class __self__(object_):
 
     def __init__(self, __self__, __this__):
@@ -10,13 +22,17 @@ class __self__(object_):
         self.__this__ = __this__
 
     @property
-    def up(self):
+    def next(self):
         return __defer__(self.__self__, self.__this__.__prototypes__[1:])
 
+    @property
+    def this(self):
+        return __defer__(self.__self__, self.__this__.__prototypes__)
+
     def __getattribute__(self, name):
-        if name.startswith("__") or name in ("up",):
+        if name.startswith("__") or name in ("next", "this"):
             return object_.__getattribute__(self, name)
-        return __defer__(self.__self__, self.__self__.__prototypes__).__getattribute__(name)
+        return find_attr(self.__self__, self.__self__.__prototypes__, name)
 
     def __setattr__(self, name, value):
         if name.startswith("__"):
@@ -47,16 +63,7 @@ class __defer__(object_):
     def __getattribute__(self, name):
         if name.startswith("__"):
             return object_.__getattribute__(self, name)
-        for prototype in self.__prototypes__:
-            try:
-                attribute = object_.__getattribute__(prototype, name)
-            except AttributeError:
-                continue
-            if isinstance(attribute, FunctionType):
-                return  MethodType(attribute, __self__(self.__self__, prototype))
-            if isinstance(attribute, dict):
-                return object(self.__self__, **dict((str(k),v) for k,v in attribute.iteritems()))
-            return attribute
+        return find_attr(self.__self__, self.__prototypes__, name)
 
 class object(object_):
 
@@ -66,7 +73,7 @@ class object(object_):
     def __getattribute__(self, name):
         if name.startswith("__"):
             return object_.__getattribute__(self, name)
-        return __defer__(self, self.__prototypes__).__getattribute__(name)
+        return find_attr(self, self.__prototypes__, name)
 
     def __init__(self, *prototypes_or_functions, **attributes):
         self.__prototypes__ = (self,)
@@ -207,26 +214,26 @@ def This():
     def Obj():
         a = 42
         def f(self):
-            return self, self.__this__
+            return self, self.this.g()
         def g(self):
             return self.a
         return locals()
-    assert Obj.f() == (Obj, Obj), Obj.f()
+    assert Obj.f() == (Obj, 42), Obj.f()
     assert Obj.g() == 42
     @Obj
     def Obj1():
         def g(self):
-            return 2 * self.up.g()
+            return 2 * self.next.g()
         return locals()
     @Obj1
     def Obj2():
         def f(self):
-            return self.up.f()
+            return self.next.f()
         def g(self):
             self.a = 12
-            return self.up.g() * 2
+            return self.next.g() * 2
         return locals()
-    assert Obj2.f() == (Obj2, Obj)
+    assert Obj2.f() == (Obj2, 42), Obj2.f()
     assert Obj2.g() == 48, Obj2.g()
 
 @autotest

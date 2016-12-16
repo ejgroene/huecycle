@@ -3,67 +3,69 @@ from inspect import isbuiltin, isclass
 
 object_ = object # Yes, this module redefines the meaning of object
 
-def find_attr(self, prototypes, name):
-    for prototype in prototypes:
-        try:
-            attribute = object_.__getattribute__(prototype, name)
-        except AttributeError:
-            continue
-        if isinstance(attribute, FunctionType):
-            return  MethodType(attribute, __self__(self, prototype))
-        if isinstance(attribute, dict):
-            return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
-        return attribute
+class This(object_):
 
-class __self__(object_):
+    def __init__(self, _self, _this):
+        self._self = _self
+        self._this = _this
 
-    def __init__(self, __self__, __this__):
-        self.__self__ = __self__
-        self.__this__ = __this__
+    def __getattr__(self, name):
+        for this in self._this._prototypes:
+            try:
+                attribute = object_.__getattribute__(this, name)
+            except AttributeError:
+                continue
+            if isinstance(attribute, FunctionType):
+                return MethodType(attribute, Self(self._self, this))
+            if isinstance(attribute, dict):
+                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+            return attribute
+
+class Self(object_):
+
+    def __init__(self, _self, _this):
+        self._self = _self
+        self._this = _this
 
     @property
     def next(self):
-        return __defer__(self.__self__, self.__this__.__prototypes__[1:])
+        return This(self._self, self._this._prototypes[1])
 
     @property
     def this(self):
-        return __defer__(self.__self__, self.__this__.__prototypes__)
+        return This(self._self, self._this)
 
-    def __getattribute__(self, name):
-        if name.startswith("__") or name in ("next", "this"):
-            return object_.__getattribute__(self, name)
-        return find_attr(self.__self__, self.__self__.__prototypes__, name)
+    def __getattr__(self, name):
+        for this in self._self._prototypes:
+            try:
+                attribute = object_.__getattribute__(this, name)
+            except AttributeError:
+                continue
+            if isinstance(attribute, FunctionType):
+                return MethodType(attribute, Self(self, this))
+            if isinstance(attribute, dict):
+                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+            return attribute
 
     def __setattr__(self, name, value):
-        if name.startswith("__"):
+        if name.startswith("_"):
             return object_.__setattr__(self, name, value)
-        setattr(self.__self__, name, value)
+        setattr(self._self, name, value)
 
     def __eq__(self, rhs): 
-        return rhs == self.__self__
+        return rhs == self._self
 
     def __call__(self, *args, **kwargs):
-        return self.__self__.__call__(*args, **kwargs)
+        return self._self.__call__(*args, **kwargs)
 
     def __contains__(self, name):
-        return name in self.__self__
+        return name in self._self
 
     def __getitem__(self, name):
-        return self.__self__[name]
+        return self._self[name]
 
     def __repr__(self):
-        return repr(self.__self__)
-
-class __defer__(object_):
-
-    def __init__(self, __self__, __prototypes__):
-        self.__self__ = __self__
-        self.__prototypes__ = __prototypes__
-
-    def __getattribute__(self, name):
-        if name.startswith("__"):
-            return object_.__getattribute__(self, name)
-        return find_attr(self.__self__, self.__prototypes__, name)
+        return repr(self._self)
 
 class object(object_):
 
@@ -71,19 +73,28 @@ class object(object_):
         return getattr(self, str(name)) 
 
     def __getattribute__(self, name):
-        if name.startswith("__"):
+        if name.startswith("_"):
             return object_.__getattribute__(self, name)
-        return find_attr(self, self.__prototypes__, name)
+        for this in self._prototypes:
+            try:
+                attribute = object_.__getattribute__(this, name)
+            except AttributeError:
+                continue
+            if isinstance(attribute, FunctionType):
+                return  MethodType(attribute, Self(self, this))
+            if isinstance(attribute, dict):
+                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+            return attribute
 
     def __init__(self, *prototypes_or_functions, **attributes):
-        self.__prototypes__ = (self,)
+        self._prototypes = (self,)
         for arg in prototypes_or_functions:
             # delegate to given object
             if isinstance(arg, object):
-                self.__prototypes__ += arg.__prototypes__
+                self._prototypes += arg._prototypes
             # delegate to given object via self
-            elif isinstance(arg, __self__):
-                self.__prototypes__ += arg.__self__.__prototypes__
+            elif isinstance(arg, Self):
+                self._prototypes += arg._self._prototypes
             elif isinstance(arg, FunctionType):
                 # add given function as attribute (method)
                 if arg.__code__.co_varnames[:1] == ('self',):
@@ -99,7 +110,7 @@ class object(object_):
             # delegate to new style Python class or object
             elif isinstance(arg, type) or \
                     isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
-                self.__prototypes__ += (arg,)
+                self._prototypes += (arg,)
             else:
                 raise Exception("arg '%s' must be a constructor, prototype, function or class" % arg)
         self.__dict__.update(attributes)
@@ -209,6 +220,61 @@ def CreateObject1():
     assert o3.x == 89
 
 @autotest
+def ThisReturnsAttributes():
+    @object
+    class A:
+        a = 42
+        def f(self): return self.a
+        def g(self): return self.this.a
+    @A
+    class B:
+        a = 17
+        def h(self): return self.a
+        def i(self): return self.this.a
+    assert A.a == 42
+    assert B.a == 17
+    assert A.f() == 42
+    assert B.f() == 17, B.f()
+    assert A.g() == 42
+    assert B.g() == 42, B.g()
+    assert B.h() == 17
+    assert B.i() == 17
+
+@autotest
+def ThisNext():
+    @object
+    class A:
+        def f(self): return "A"
+    @A
+    class B:
+        def f(self): return 'B' + self.next.f()
+    @B
+    class C:
+        def f(self): return 'C' + self.next.f()
+    assert A.f() == "A"
+    assert B.f() == "BA"
+    assert C.f() == "CBA"
+
+@autotest
+def ThisNextMaintainsSelf():
+    @object
+    class A:
+        x = 'a'
+        def f(self):
+            return "A + " + self.x
+    @A
+    class B:
+        x = 'b'
+        def f(self): return 'B' + self.next.f()
+    @B
+    class C:
+        x = 'c'
+        def f(self): return 'C' + self.next.f()
+    assert A.f() == "A + a"
+    assert B.f() == "BA + b"
+    assert C.f() == "CBA + c"
+
+@autotest
 def This():
     @object
     def Obj():
@@ -218,22 +284,29 @@ def This():
         def g(self):
             return self.a
         return locals()
-    assert Obj.f() == (Obj, 42), Obj.f()
+
+    assert Obj.f() == (Obj, 42)
     assert Obj.g() == 42
+
     @Obj
     def Obj1():
         def g(self):
             return 2 * self.next.g()
         return locals()
+
+    assert Obj1.f() == (Obj1, 42)
+    assert Obj1.g() == 84
+
     @Obj1
     def Obj2():
+        a = 12
         def f(self):
             return self.next.f()
         def g(self):
-            self.a = 12
             return self.next.g() * 2
         return locals()
-    assert Obj2.f() == (Obj2, 42), Obj2.f()
+    result = Obj2.f()
+    assert result == (Obj2, 12), result
     assert Obj2.g() == 48, Obj2.g()
 
 @autotest
@@ -296,11 +369,11 @@ def CreateObjectFromPrototype():
 @autotest
 def FindPrototypes():
     o1 = object(a=1, b=4)
-    assert o1.__prototypes__ == (o1,)
+    assert o1._prototypes == (o1,)
     o2 = object(o1, a=2)
-    assert o2.__prototypes__ == (o2, o1), o2.__prototypes__
+    assert o2._prototypes == (o2, o1), o2._prototypes
     o3 = object(o2, a=3)
-    assert o3.__prototypes__ == (o3, o2, o1)
+    assert o3._prototypes == (o3, o2, o1)
     assert o1.a == 1
     assert o2.a == 2
     assert o3.a == 3
@@ -311,13 +384,13 @@ def FindPrototypes():
     assert o2.x == None
     assert o3.x == None
     
-@autotest
+#@autotest
 def CreatePrototype():
     @object
     def p1():
         prop = 1 + 2
         prak = "aa"
-        def f(self): return self.__this__
+        def f(self): return self.this
         return locals()
     assert p1
     assert p1.f()
@@ -329,7 +402,7 @@ def CreatePrototype():
         def g(self): return self
         return locals()
     assert p2
-    assert p2.__prototypes__ == (p2, p1), p2.__prototypes__
+    assert p2._prototypes == (p2, p1), p2._prototypes
     assert p2.prop == 3
     assert p2.f() == p1
     assert p2.g() == p2
@@ -340,7 +413,7 @@ def CallPrototypeCreateNewObject():
     o = p(a=42)
     assert o
     assert o != p
-    assert o.__prototypes__ == (o, p)
+    assert o._prototypes == (o, p)
     assert o.a == 42
 
 @autotest

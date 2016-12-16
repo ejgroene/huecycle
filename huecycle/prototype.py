@@ -3,23 +3,17 @@ from inspect import isbuiltin, isclass
 
 object_ = object # Yes, this module redefines the meaning of object
 
-class This(object_):
-
-    def __init__(self, _self, _this):
-        self._self = _self
-        self._this = _this
-
-    def __getattr__(self, name):
-        for this in self._this._prototypes:
-            try:
-                attribute = object_.__getattribute__(this, name)
-            except AttributeError:
-                continue
-            if isinstance(attribute, FunctionType):
-                return MethodType(attribute, Self(self._self, this))
-            if isinstance(attribute, dict):
-                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
-            return attribute
+def find_attr(self, prototypes, name):
+    for this in prototypes:
+        try:
+            attribute = object_.__getattribute__(this, name)
+        except AttributeError:
+            continue
+        if isinstance(attribute, FunctionType):
+            return MethodType(attribute, Self(self, this))
+        if isinstance(attribute, dict):
+            return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+        return attribute
 
 class Self(object_):
 
@@ -36,16 +30,7 @@ class Self(object_):
         return This(self._self, self._this)
 
     def __getattr__(self, name):
-        for this in self._self._prototypes:
-            try:
-                attribute = object_.__getattribute__(this, name)
-            except AttributeError:
-                continue
-            if isinstance(attribute, FunctionType):
-                return MethodType(attribute, Self(self, this))
-            if isinstance(attribute, dict):
-                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
-            return attribute
+        return find_attr(self._self, self._self._prototypes, name)
 
     def __setattr__(self, name, value):
         if name.startswith("_"):
@@ -67,6 +52,11 @@ class Self(object_):
     def __repr__(self):
         return repr(self._self)
 
+class This(Self):
+
+    def __getattr__(self, name):
+        return find_attr(self._self, self._this._prototypes, name)
+
 class object(object_):
 
     def __getitem__(self, name):
@@ -75,16 +65,7 @@ class object(object_):
     def __getattribute__(self, name):
         if name.startswith("_"):
             return object_.__getattribute__(self, name)
-        for this in self._prototypes:
-            try:
-                attribute = object_.__getattribute__(this, name)
-            except AttributeError:
-                continue
-            if isinstance(attribute, FunctionType):
-                return  MethodType(attribute, Self(self, this))
-            if isinstance(attribute, dict):
-                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
-            return attribute
+        return find_attr(self, self._prototypes, name)
 
     def __init__(self, *prototypes_or_functions, **attributes):
         self._prototypes = (self,)
@@ -218,6 +199,20 @@ def CreateObject1():
     o3 = object(o2, lambda self: 23, lambda self: 56, lambda: {"x": 89})
     assert o3["<lambda>"]() == 56  #yuk
     assert o3.x == 89
+
+@autotest
+def SelfFunctionLookup():
+    @object
+    class A:
+        def f(self):
+            return self.g()
+        def g(self):
+            return "a"
+    @A
+    class B:
+        pass
+
+    assert B.f() == 'a'
 
 @autotest
 def ThisReturnsAttributes():

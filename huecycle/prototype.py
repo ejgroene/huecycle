@@ -1,5 +1,4 @@
 from types import FunctionType, MethodType, ClassType
-from inspect import isbuiltin, isclass
 
 object_ = object # Yes, this module redefines the meaning of object
 
@@ -18,39 +17,27 @@ def find_attr(self, prototypes, name):
 class Self(object_):
 
     def __init__(self, _self, _this):
-        self._self = _self
-        self._this = _this
-
-    @property
-    def next(self):
-        return This(self._self, self._this._prototypes[1])
+        object_.__setattr__(self, '_self', _self)
+        object_.__setattr__(self, '_this', _this)
 
     @property
     def this(self):
         return This(self._self, self._this)
 
+    @property
+    def next(self):
+        return This(self._self, self._this._prototypes[1])
+
     def __getattr__(self, name):
         return find_attr(self._self, self._self._prototypes, name)
 
-    def __setattr__(self, name, value):
-        if name.startswith("_"):
-            return object_.__setattr__(self, name, value)
-        setattr(self._self, name, value)
-
-    def __eq__(self, rhs): 
-        return rhs == self._self
-
-    def __call__(self, *args, **kwargs):
-        return self._self.__call__(*args, **kwargs)
-
-    def __contains__(self, name):
-        return name in self._self
-
-    def __getitem__(self, name):
-        return self._self[name]
-
-    def __repr__(self):
-        return repr(self._self)
+    # proxy
+    def __setattr__(self, name, val): return setattr(self._self, name, value)
+    def __cmp__(self, rhs):           return cmp(self._self, rhs)
+    def __call__(self, *arg, **kws):  return self._self(*arg, **kws)
+    def __contains__(self, name):     return name in self._self
+    def __getitem__(self, name):      return self._self[name]
+    def __repr__(self):               return repr(self._self)
 
 class This(Self):
 
@@ -59,57 +46,47 @@ class This(Self):
 
 class object(object_):
 
-    def __getitem__(self, name):
-        return getattr(self, str(name)) 
+    def __init__(self, *prototypes_or_functions, **attributes):
+        self._prototypes = (self,)
+        for arg in prototypes_or_functions:
+            if isinstance(arg, object):
+                self._prototypes += arg._prototypes
+            elif isinstance(arg, Self):
+                self._prototypes += arg._self._prototypes
+            elif isinstance(arg, FunctionType):
+                if arg.__code__.co_varnames[:1] == ('self',):
+                    attributes[arg.__name__] = arg
+                elif arg.__code__.co_argcount == 0:
+                    attributes.update(arg())
+                else:
+                    raise Exception(
+                        "function '%s' must accept no args or first arg must be 'self'"
+                        % arg.__name__)
+            elif isinstance(arg, ClassType):
+                attributes = arg.__dict__
+            elif isinstance(arg, type) or \
+                    isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
+                self._prototypes += (arg,)
+            else:
+                raise Exception(
+                    "arg '%s' must be a constructor, prototype, function or class"
+                    % arg)
+        self.__dict__.update(attributes)
+           
+    def __call__(self, *prototypes_or_functions, **attributes):
+        return object(self, *prototypes_or_functions, **attributes)
 
     def __getattribute__(self, name):
         if name.startswith("_"):
             return object_.__getattribute__(self, name)
         return find_attr(self, self._prototypes, name)
 
-    def __init__(self, *prototypes_or_functions, **attributes):
-        self._prototypes = (self,)
-        for arg in prototypes_or_functions:
-            # delegate to given object
-            if isinstance(arg, object):
-                self._prototypes += arg._prototypes
-            # delegate to given object via self
-            elif isinstance(arg, Self):
-                self._prototypes += arg._self._prototypes
-            elif isinstance(arg, FunctionType):
-                # add given function as attribute (method)
-                if arg.__code__.co_varnames[:1] == ('self',):
-                    attributes[arg.__name__] = arg
-                # use given function as factory for attributes
-                elif arg.__code__.co_argcount == 0:
-                    attributes.update(arg())
-                else:
-                    raise Exception("function '%s' must accept no args or first arg must be 'self'" % arg.__name__)
-            # use given old style Python class as source for attributes
-            elif isinstance(arg, ClassType):
-                attributes = arg.__dict__
-            # delegate to new style Python class or object
-            elif isinstance(arg, type) or \
-                    isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
-                self._prototypes += (arg,)
-            else:
-                raise Exception("arg '%s' must be a constructor, prototype, function or class" % arg)
-        self.__dict__.update(attributes)
-           
-    def __call__(self, *prototypes_or_functions, **attributes):
-        return object(self, *prototypes_or_functions, **attributes)
-
-    def __contains__(self, name):
-        return name in self.__dict__
-
-    def __repr__(self):
-        return repr(dict(self.__iter__()))
-
-    def __iter__(self):
-        return ((name, value) for name, value in self.__dict__.iteritems() if not name.startswith("_"))
-
-    def update(self, attributes):
-        return self.__dict__.update(attributes)
+    #behave a bit dict'isch
+    def __getitem__(self, name):  return getattr(self, str(name)) 
+    def __contains__(self, name): return name in self.__dict__
+    def __repr__(self):           return repr(dict(self.__iter__()))
+    def __iter__(self):           return ((k, v) for k, v in self.__dict__.iteritems()
+                                            if not k.startswith("_"))
 
 from autotest import autotest
 
@@ -270,7 +247,7 @@ def ThisNextMaintainsSelf():
     assert C.f() == "CBA + c"
 
 @autotest
-def This():
+def ThisIs():
     @object
     def Obj():
         a = 42

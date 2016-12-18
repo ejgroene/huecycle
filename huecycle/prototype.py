@@ -14,27 +14,20 @@ def find_attr(self, prototypes, name):
             return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
         return attribute
 
-class This(object_):
+class Self(object_):
 
     def __init__(self, _self, _this, _prox=None):
         object_.__setattr__(self, '_self', _self)
         object_.__setattr__(self, '_this', _this)
-        object_.__setattr__(self, '_prox', _prox if _prox else _self)
-
-    def __getattr__(self, name):
-        return find_attr(self._self, self._prox._prototypes, name)
-
-    def __cmp__(self, rhs):           return cmp(self._prox, rhs)
-
-class Self(This):
+        object_.__setattr__(self, '_prox', _prox if _prox else _this)
 
     @property
     def this(self):
-        return This(self._self, self._this, self._this)
+        return Self(self._self, self._this)
 
     @property
     def next(self):
-        return This(self._self, self._this._prototypes[1], self._this._prototypes[1])
+        return Self(self._self, self._this._prototypes[1])
 
     def __getattr__(self, name):
         return find_attr(self._self, self._prox._prototypes, name)
@@ -411,7 +404,6 @@ def compare_this_to_object():
         return locals()
     assert p1
     assert p1.f()
-    print ">>>>", p1.f()._prox
     assert p1 == p1.f() # <= this versus object itself
     assert p1.prop == 3, p1.prop
     assert p1.prak == "aa"

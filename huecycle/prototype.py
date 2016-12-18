@@ -1,13 +1,14 @@
 from types import FunctionType, MethodType, ClassType
+from inspect import getargspec, isfunction, isclass
 
-object_ = object # Yes, this module redefines the meaning of object
+python_object = object # Yes, this module redefines the meaning of object
 
-class Self(object_):
+class Self(python_object):
 
-    def __init__(me, _self, _this, _prox=None):
-        object_.__setattr__(me, '_self', _self)
-        object_.__setattr__(me, '_this', _this)
-        object_.__setattr__(me, '_prox', _prox if _prox else _this)
+    def __init__(me, self, this, prox=None):
+        python_object.__setattr__(me, '_self', self)
+        python_object.__setattr__(me, '_this', this)
+        python_object.__setattr__(me, '_prox', prox if prox else this)
 
     @property
     def this(me):
@@ -27,51 +28,43 @@ class Self(object_):
     def __getitem__(me, name):      return me._prox[name]
     def __repr__(me):               return repr(me._prox)
 
-class object(object_):
+class object(python_object):
 
-    def __init__(self, *prototypes_or_functions, **attributes):
+    def __init__(self, *prototypes_methods_or_ctors, **attributes):
         self._prototypes = (self,)
-        for arg in prototypes_or_functions:
-            if isinstance(arg, object):
+        for arg in prototypes_methods_or_ctors:
+            if isfunction(arg) and 'self' in getargspec(arg).args:  # f(self): method
+                attributes[arg.__name__] = arg
+            elif isfunction(arg) and not getargspec(arg).args:  # f(): ctor
+                attributes.update(arg())
+            elif isinstance(arg, ClassType):            # old style class: ctor
+                attributes.update(arg.__dict__)
+            elif hasattr(arg, '_prototypes'):           # other object: prototype
                 self._prototypes += arg._prototypes
-            elif isinstance(arg, Self):
-                self._prototypes += arg._self._prototypes
-            elif isinstance(arg, FunctionType):
-                if arg.__code__.co_varnames[:1] == ('self',):
-                    attributes[arg.__name__] = arg
-                elif arg.__code__.co_argcount == 0:
-                    attributes.update(arg())
-                else:
-                    raise Exception(
-                        "function '%s' must accept no args or first arg must be 'self'"
-                        % arg.__name__)
-            elif isinstance(arg, ClassType):
-                attributes = arg.__dict__
-            elif isinstance(arg, type) or \
-                    isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
+            elif isclass(arg):                          # new style class: prototype
                 self._prototypes += (arg,)
+            elif isinstance(arg, python_object) and type(arg).__module__ != '__builtin__': 
+                self._prototypes += (arg,)              # new style object: prototype
             else:
-                raise Exception(
-                    "arg '%s' must be a constructor, prototype, function or class"
-                    % arg)
+                raise Exception("not a valid argument: %s" % arg)
         self.__dict__.update(attributes)
            
-    def __call__(self, *prototypes_or_functions, **attributes):
-        return object(self, *prototypes_or_functions, **attributes)
-
     def __getattribute__(self, name, prototypes=None):
         if name.startswith("_"):
-            return object_.__getattribute__(self, name)
+            return python_object.__getattribute__(self, name)
         for this in prototypes or self._prototypes:
             try:
-                attribute = object_.__getattribute__(this, name)
+                attribute = python_object.__getattribute__(this, name)
             except AttributeError:
                 continue
-            if isinstance(attribute, FunctionType):
+            if isfunction(attribute):
                 return MethodType(attribute, Self(self, this, self))
             if isinstance(attribute, dict):
                 return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
             return attribute
+
+    def __call__(self, *prototypes_or_functions, **attributes):
+        return object(self, *prototypes_or_functions, **attributes)
 
     #behave a bit dict'isch
     def __getitem__(self, name):  return getattr(self, str(name)) 
@@ -90,19 +83,19 @@ def accept_noarg_ctor_function_creating_attributes():
         object(f)
         assert False
     except Exception as e:
-        assert str(e) == "function 'f' must accept no args or first arg must be 'self'", e
+        assert "not a valid argument:" in str(e), str(e)
     def g(a, b):
         pass
     try:
         object(g)
         assert False
     except Exception as e:
-        assert str(e) == "function 'g' must accept no args or first arg must be 'self'"
+        assert "not a valid argument:" in str(e)
     try:
         object('10')
         assert False
     except Exception as e:
-        assert str(e) == "arg '10' must be a constructor, prototype, function or class", e
+        assert "not a valid argument:" in str(e)
 
 @autotest
 def simply_pass_functions_as_attributes():
@@ -377,7 +370,7 @@ def create_object_with_this():
 
 @autotest
 def normal_python_classes_can_be_delegated_to():
-    class a(object_):
+    class a(python_object):
         c = 10
         def f(self):
             return 42
@@ -392,7 +385,7 @@ def normal_python_classes_can_be_delegated_to():
 
 @autotest
 def normal_python_object_can_be_delegated_to():
-    class A(object_):
+    class A(python_object):
         c = 16
         def f(self):
             return 23
@@ -400,7 +393,7 @@ def normal_python_object_can_be_delegated_to():
             return self.d
     a = A()
     a.d = 8
-    assert isinstance(a, object_)
+    assert isinstance(a, python_object)
     o = object(a)
     assert o.f() == 23
     assert o.c == 16

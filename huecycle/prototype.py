@@ -2,7 +2,7 @@ from types import FunctionType, MethodType, ClassType
 
 object_ = object # Yes, this module redefines the meaning of object
 
-def find_attr(self, prototypes, name):
+def find_attr(prototypes, name, self):
     for this in prototypes:
         try:
             attribute = object_.__getattribute__(this, name)
@@ -30,7 +30,7 @@ class Self(object_):
         return Self(me._self, me._this._prototypes[1])
 
     def __getattr__(me, name):
-        return find_attr(me._self, me._prox._prototypes, name)
+        return find_attr(me._prox._prototypes, name, me._self)
 
     # proxy
     def __setattr__(me, name, val): return setattr(me._prox, name, value)
@@ -75,7 +75,7 @@ class object(object_):
     def __getattribute__(me, name):
         if name.startswith("_"):
             return object_.__getattribute__(me, name)
-        return find_attr(me, me._prototypes, name)
+        return find_attr(me._prototypes, name, me)
 
     #behave a bit dict'isch
     def __getitem__(me, name):  return getattr(me, str(name)) 
@@ -107,6 +107,19 @@ def accept_noarg_ctor_function_creating_attributes():
         assert False
     except Exception as e:
         assert str(e) == "arg '10' must be a constructor, prototype, function or class", e
+
+@autotest
+def simply_pass_functions_as_attributes():
+    o = object()
+    def f(self):
+        return "Hello!"
+    o2 = o(f=f)
+    assert o2.f() == "Hello!"
+    def g(self):
+        return "Goodbye!"
+    o3 = o(f, g)
+    assert o3.f() == "Hello!"
+    assert o3.g() == "Goodbye!"
 
 @autotest
 def create_simple_object():
@@ -345,6 +358,28 @@ def more_elaborate_example_of_using_this_and_next():
     assert Obj2.g() == 48, Obj2.g()
 
 @autotest
+def create_object_with_this():
+    @object
+    class a:
+        def f(self):
+            return self(b=43), self.this(b=42)
+        def g(self):
+            return "a.g"
+    @a
+    class b:
+        b = 11
+        c = 14
+        def g(self):
+            return "b.g"
+    x, y = b.f()
+    assert x.g() == "b.g"
+    assert y.g() == "a.g"
+    assert x.b == 43
+    assert y.b == 42
+    assert x.c == 14
+    assert y.c == None
+
+@autotest
 def normal_python_classes_can_be_delegated_to():
     class a(object_):
         c = 10
@@ -418,7 +453,7 @@ def compare_this_to_object():
     assert p2.g() == p2
 
 @autotest
-def CallParent():
+def dispatch_calls_to_next_prototype_in_chain():
     @object
     def o0():
         return locals()
@@ -437,17 +472,52 @@ def CallParent():
     assert o2.f("Y") == "[|Y|]"
     assert o3.f("Z") == "[|Z|]", o3.f("Z")
 
+@autotest
+def contains_proxied():
+    def f(self, a):
+        return a in self
+    o = object(f, a=10)
+    assert 'a' in o
+    assert o.f('a')
+    assert not o.f('b')
+
 
 @autotest
-def OverrideAttributesInCtor():
-    @object
-    def x():
-        a=2
-        return locals()
-    assert x.a == 2
+def getitem_proxied():
+    def f(self, a):
+        return self[a]
+    o = object(f, a=29)
+    assert o['a'] == 29
+    assert o.f('a') == 29
 
 @autotest
-def FindFunctionsNoLuckWithLocals():
+def equals_proxied_on_self():
+    def g(self):
+        return self
+    def f(self, a):
+        return self == a and a == self
+    o = object(f, g)
+    assert o == o.g()
+    assert o.g() == o
+    assert o.f(o)
+    assert not o.f(None)
+
+@autotest
+def iterate_public_attrs():
+    def f(self): pass
+    def _g(self): pass
+    o = object(f, _g, a=10, _b=20)
+    assert [('f', f), ('a', 10)], list(o)
+
+@autotest
+def dicts_attrs_become_objects_when_looked_up():
+    o = object(a={'b':{'c':{'d':3}}})
+    assert o.a.b.c.d == 3, o.a.b.c.d
+    o = object(a={'b':{2:{'d':3}}})
+    assert o.a.b[2].d == 3, o.a.b.c.d
+
+@autotest
+def some_excercises_with_reflection_with_no_real_result():
     a = 42
     def F(b, c=84, *args, **kwargs):
         d = a
@@ -508,77 +578,3 @@ def FindFunctionsNoLuckWithLocals():
     assert g == globals()
     assert l == {}
 
-
-@autotest
-def WithClass():
-    a = 42
-    class _:
-        b = a
-        def G(c, d=21, *orgs, **kworgs):
-            e = a
-            f = b
-            g = c
-            h = d
-            return 63
-
-    assert _.__dict__["b"] == 42
-    G = _.__dict__["G"]
-    assert G.__closure__[0].cell_contents == 42, G.__closure__
-
-
-@autotest
-def SimplerWithFunctionsAsProperties():
-    o = object()
-    def f(self):
-        return "Hello!"
-    o2 = o(f=f)
-    assert o2.f() == "Hello!"
-    def g(self):
-        return "Goodbye!"
-    o3 = o(f, g)
-    assert o3.f() == "Hello!"
-    assert o3.g() == "Goodbye!"
-
-@autotest
-def Contains():
-    def f(self, a):
-        return a in self
-    o = object(f, a=10)
-    assert 'a' in o
-    assert o.f('a')
-    assert not o.f('b')
-
-
-@autotest
-def GetItem():
-    def f(self, a):
-        return self[a]
-    o = object(f, a=29)
-    assert o['a'] == 29
-    assert o.f('a') == 29
-
-@autotest
-def Equals():
-    def g(self):
-        return self
-    def f(self, a):
-        return self == a and a == self
-    o = object(f, g)
-    assert o == o.g()
-    assert o.g() == o
-    assert o.f(o)
-    assert not o.f(None)
-
-@autotest
-def IteratePublicAttributes():
-    def f(self): pass
-    def _g(self): pass
-    o = object(f, _g, a=10, _b=20)
-    assert [('f', f), ('a', 10)], list(o)
-
-@autotest
-def DictsBecomeObjects():
-    o = object(a={'b':{'c':{'d':3}}})
-    assert o.a.b.c.d == 3, o.a.b.c.d
-    o = object(a={'b':{2:{'d':3}}})
-    assert o.a.b[2].d == 3, o.a.b.c.d

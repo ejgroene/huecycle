@@ -9,7 +9,7 @@ def find_attr(self, prototypes, name):
         except AttributeError:
             continue
         if isinstance(attribute, FunctionType):
-            return MethodType(attribute, Self(self, this))
+            return MethodType(attribute, Self(self, this, self))
         if isinstance(attribute, dict):
             return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
         return attribute
@@ -19,33 +19,33 @@ class This(object_):
     def __init__(self, _self, _this, _prox=None):
         object_.__setattr__(self, '_self', _self)
         object_.__setattr__(self, '_this', _this)
-        object_.__setattr__(self, '_prox', _prox)
+        object_.__setattr__(self, '_prox', _prox if _prox else _self)
 
     def __getattr__(self, name):
-        return find_attr(self._self, self._this._prototypes, name)
+        return find_attr(self._self, self._prox._prototypes, name)
 
-    def __cmp__(self, rhs):           return cmp(self._this, rhs)
+    def __cmp__(self, rhs):           return cmp(self._prox, rhs)
 
 class Self(This):
 
     @property
     def this(self):
-        return This(self._self, self._this)
+        return This(self._self, self._this, self._this)
 
     @property
     def next(self):
-        return This(self._self, self._this._prototypes[1])
+        return This(self._self, self._this._prototypes[1], self._this._prototypes[1])
 
     def __getattr__(self, name):
-        return find_attr(self._self, self._self._prototypes, name)
+        return find_attr(self._self, self._prox._prototypes, name)
 
     # proxy
-    def __setattr__(self, name, val): return setattr(self._self, name, value)
-    def __cmp__(self, rhs):           return cmp(self._self, rhs)
-    def __call__(self, *arg, **kws):  return self._self(*arg, **kws)
-    def __contains__(self, name):     return name in self._self
-    def __getitem__(self, name):      return self._self[name]
-    def __repr__(self):               return repr(self._self)
+    def __setattr__(self, name, val): return setattr(self._prox, name, value)
+    def __cmp__(self, rhs):           return cmp(self._prox, rhs)
+    def __call__(self, *arg, **kws):  return self._prox(*arg, **kws)
+    def __contains__(self, name):     return name in self._prox
+    def __getitem__(self, name):      return self._prox[name]
+    def __repr__(self):               return repr(self._prox)
 
 class object(object_):
 
@@ -411,6 +411,7 @@ def compare_this_to_object():
         return locals()
     assert p1
     assert p1.f()
+    print ">>>>", p1.f()._prox
     assert p1 == p1.f() # <= this versus object itself
     assert p1.prop == 3, p1.prop
     assert p1.prak == "aa"

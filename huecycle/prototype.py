@@ -14,11 +14,19 @@ def find_attr(self, prototypes, name):
             return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
         return attribute
 
-class Self(object_):
+class This(object_):
 
-    def __init__(self, _self, _this):
+    def __init__(self, _self, _this, _prox=None):
         object_.__setattr__(self, '_self', _self)
         object_.__setattr__(self, '_this', _this)
+        object_.__setattr__(self, '_prox', _prox)
+
+    def __getattr__(self, name):
+        return find_attr(self._self, self._this._prototypes, name)
+
+    def __cmp__(self, rhs):           return cmp(self._this, rhs)
+
+class Self(This):
 
     @property
     def this(self):
@@ -38,11 +46,6 @@ class Self(object_):
     def __contains__(self, name):     return name in self._self
     def __getitem__(self, name):      return self._self[name]
     def __repr__(self):               return repr(self._self)
-
-class This(Self):
-
-    def __getattr__(self, name):
-        return find_attr(self._self, self._this._prototypes, name)
 
 class object(object_):
 
@@ -85,13 +88,13 @@ class object(object_):
     def __getitem__(self, name):  return getattr(self, str(name)) 
     def __contains__(self, name): return name in self.__dict__
     def __repr__(self):           return repr(dict(self.__iter__()))
-    def __iter__(self):           return ((k, v) for k, v in self.__dict__.iteritems()
-                                            if not k.startswith("_"))
+    def __iter__(self):           return ((k,v) for k,v in \
+                                    self.__dict__.iteritems() if not k.startswith('_'))
 
 from autotest import autotest
 
 @autotest
-def CheckFunctions():
+def accept_noarg_ctor_function_creating_attributes():
     def f(not_self, a, b=10):
         pass
     try:
@@ -112,46 +115,8 @@ def CheckFunctions():
     except Exception as e:
         assert str(e) == "arg '10' must be a constructor, prototype, function or class", e
 
-
 @autotest
-def UseTwoPrototypes():
-    def f1(self):
-        return "f1"
-    o1 = object(f1)
-    def f2(self):
-        return "f2"
-    o2 = object(f2)
-    o3 = object(o1, o2)
-    assert o3.f1() == "f1"
-    assert o3.f2() == "f2"
-    def f2(self):
-        return "new f2"
-    o4 = object(f2)
-    o5 = object(o3, o4)
-    assert o5.f2() == "f2"
-    o5 = object(o4, o3)
-    assert o5.f2() == "new f2"
-    def f2(self):
-        return "own f2"
-    o6 = object(o5, o4, o3, o2, o1, f2)
-    assert o6.f2() == "own f2"
-    assert o6.f1() == "f1"
-    
-@autotest
-def SelfAsPrototype():
-    def f(self):
-        return "f"
-    def g(self):
-        o1 = self()
-        o2 = object(self)
-        return o1, o2
-    o = object(f, g)
-    x, y = o.g()
-    assert x.f() == "f", x.f()
-    assert y.f() == "f", y.f()
-
-@autotest
-def CreateObject1():
+def create_simple_object():
     o = object()
     assert o
     o = object(a=1)
@@ -178,7 +143,113 @@ def CreateObject1():
     assert o3.x == 89
 
 @autotest
-def SelfFunctionLookup():
+def create_using_old_style_python_class():
+    @object
+    class obj:
+        a = 42
+        def f(self):
+            return 54
+    assert obj.a == 42
+    assert obj.f() == 54
+
+@autotest
+def calling_object_create_new_object():
+    p = object()
+    o = p(a=42)
+    assert o
+    assert o != p
+    assert o._prototypes == (o, p)
+    assert o.a == 42
+
+@autotest
+def self_is_callable_and_creates_new_object():
+    def f(self):
+        return "f"
+    def g(self):
+        o1 = self()
+        o2 = object(self)
+        return o1, o2
+    o = object(f, g)
+    x, y = o.g()
+    assert x.f() == "f", x.f()
+    assert y.f() == "f", y.f()
+
+@autotest
+def embedded_object_creation_with_self_as_decorator():
+    def f(self):
+        @self
+        def f():
+            return {"a": 42}
+        return f
+    o = object(f, a=24)
+    assert o.f().a == 42
+
+@autotest
+def create_small_hierarchy_of_object():
+    creature = object(alive=True)
+    @creature
+    class person:
+        def age(self): return 2015 - self.birth
+    me = object(person, birth=1990)
+    assert me.age() == 25, me
+    assert me.alive == True
+    me.alive = False
+    assert me.alive == False
+    assert creature.alive == True
+    her = person(birth=1994) # nicer syntax
+    assert her.age() == 21
+    assert her.alive == True
+
+@autotest
+def create_object_with_multiple_prototypes():
+    def f1(self):
+        return "f1"
+    o1 = object(f1)
+    def f2(self):
+        return "f2"
+    o2 = object(f2)
+    o3 = object(o1, o2)
+    assert o3.f1() == "f1"
+    assert o3.f2() == "f2"
+    def f2(self):
+        return "new f2"
+    o4 = object(f2)
+    o5 = object(o3, o4)
+    assert o5.f2() == "f2"
+    o5 = object(o4, o3)
+    assert o5.f2() == "new f2"
+    def f2(self):
+        return "own f2"
+    o6 = object(o5, o4, o3, o2, o1, f2)
+    assert o6.f2() == "own f2"
+    assert o6.f1() == "f1"
+    
+@autotest
+def create_single_method_object_aka_functor():
+    @object
+    def f(self):
+        return "hello"
+    assert f.f() == "hello"
+
+@autotest
+def lookup_globals():
+    @object
+    def one():
+        def f(self):
+            return autotest
+        return locals()
+    assert one.f() == autotest
+
+@autotest
+def lookup_attributes():
+    o = object(a=1, b=2)
+    assert "a" in o
+    assert "b" in o
+    assert "c" not in o
+    assert str(o) == "{'a': 1, 'b': 2}", str(o)
+
+@autotest
+def lookup_function():
     @object
     class A:
         def f(self):
@@ -192,7 +263,7 @@ def SelfFunctionLookup():
     assert B.f() == 'a'
 
 @autotest
-def ThisReturnsAttributes():
+def this_gives_access_to_object_func_is_found():
     @object
     class A:
         a = 42
@@ -213,7 +284,7 @@ def ThisReturnsAttributes():
     assert B.i() == 17
 
 @autotest
-def ThisNext():
+def next_gives_access_to_objects_higher_up_in_the_chain():
     @object
     class A:
         def f(self): return "A"
@@ -228,7 +299,7 @@ def ThisNext():
     assert C.f() == "CBA"
 
 @autotest
-def ThisNextMaintainsSelf():
+def this_preserves_self_when_binding_and_calling_methods():
     @object
     class A:
         x = 'a'
@@ -246,8 +317,7 @@ def ThisNextMaintainsSelf():
     assert B.f() == "BA + b"
     assert C.f() == "CBA + c"
 
-@autotest
-def ThisIs():
+def more_elaborate_example_of_using_this_and_next():
     @object
     def Obj():
         a = 42
@@ -282,32 +352,22 @@ def ThisIs():
     assert Obj2.g() == 48, Obj2.g()
 
 @autotest
-def CreateFromOldStyleClass():
-    @object
-    class obj: # strange but convenient syntax?
-        a = 42
-        def f(self):
-            return 54
-    assert obj.a == 42
-    assert obj.f() == 54
-
-@autotest
-def DelegateToNormalPythonClass():
-    class A(object_):
+def normal_python_classes_can_be_delegated_to():
+    class a(object_):
         c = 10
         def f(self):
             return 42
         def g(self):
             return self.b # Oh yeah!
-    assert isinstance(A, type)
-    o = object(A, b=67)
+    assert isinstance(a, type)
+    o = object(a, b=67)
     assert o.f() == 42
     assert o.b == 67
     assert o.g() == 67
     assert o.c == 10
 
 @autotest
-def DelegateToNormalPythonInstance():
+def normal_python_object_can_be_delegated_to():
     class A(object_):
         c = 16
         def f(self):
@@ -324,22 +384,7 @@ def DelegateToNormalPythonInstance():
     assert o.g() == 8
 
 @autotest
-def CreateObjectFromPrototype():
-    creature = object(alive=True)
-    @creature
-    class person():
-        def age(self): return 2015 - self.birth
-    me = object(person, birth=1990)
-    assert me.age() == 25, me
-    assert me.alive == True
-    me.alive = False
-    assert me.alive == False
-    assert creature.alive == True
-    her = person(birth=1994) # nicer syntax
-    assert her.age() == 21
-
-@autotest
-def FindPrototypes():
+def prototypes_mixed_with_other_args():
     o1 = object(a=1, b=4)
     assert o1._prototypes == (o1,)
     o2 = object(o1, a=2)
@@ -356,8 +401,8 @@ def FindPrototypes():
     assert o2.x == None
     assert o3.x == None
     
-#@autotest
-def CreatePrototype():
+@autotest
+def compare_this_to_object():
     @object
     def p1():
         prop = 1 + 2
@@ -366,7 +411,7 @@ def CreatePrototype():
         return locals()
     assert p1
     assert p1.f()
-    assert p1 == p1.f()
+    assert p1 == p1.f() # <= this versus object itself
     assert p1.prop == 3, p1.prop
     assert p1.prak == "aa"
     @p1
@@ -380,47 +425,20 @@ def CreatePrototype():
     assert p2.g() == p2
 
 @autotest
-def CallPrototypeCreateNewObject():
-    p = object()
-    o = p(a=42)
-    assert o
-    assert o != p
-    assert o._prototypes == (o, p)
-    assert o.a == 42
-
-@autotest
-def UseGlobals():
-    @object
-    def one():
-        def f(self):
-            return autotest
-        return locals()
-    assert one.f() == autotest
-
-@autotest
-def AccessProperties():
-    o = object(a=1, b=2)
-    assert "a" in o
-    assert "b" in o
-    assert "c" not in o
-    assert str(o) == "{'a': 1, 'b': 2}", str(o)
-
-@object
-def o0():
-    pass
-    return locals()
-
-#@autotest   # a bit to difficult yet; methods don't know their 'this', only self
 def CallParent():
-    a = 1
+    @object
+    def o0():
+        return locals()
     @o0
-    def o1(self):
+    def o1():
         def f(self, s):
             return  "|%s|" % s
+        return locals()
     @o1
-    def o2(self):
+    def o2():
         def f(self, s):
-            return "[%s]" % self.this.f(s)
+            return "[%s]" % self.next.f(s)
+        return locals()
     o3 = o2()
     assert o1.f("X") == "|X|"
     assert o2.f("Y") == "[|Y|]"
@@ -527,16 +545,6 @@ def SimplerWithFunctionsAsProperties():
     o3 = o(f, g)
     assert o3.f() == "Hello!"
     assert o3.g() == "Goodbye!"
-
-@autotest
-def EmbeddedObjectCreationWithSelfAsDecorator():
-    def f(self):
-        @self
-        def f():
-            return {"a": 42}
-        return f
-    o = object(f, a=24)
-    assert o.f().a == 42
 
 @autotest
 def Contains():

@@ -16,39 +16,39 @@ def find_attr(self, prototypes, name):
 
 class Self(object_):
 
-    def __init__(self, _self, _this, _prox=None):
-        object_.__setattr__(self, '_self', _self)
-        object_.__setattr__(self, '_this', _this)
-        object_.__setattr__(self, '_prox', _prox if _prox else _this)
+    def __init__(me, _self, _this, _prox=None):
+        object_.__setattr__(me, '_self', _self)
+        object_.__setattr__(me, '_this', _this)
+        object_.__setattr__(me, '_prox', _prox if _prox else _this)
 
     @property
-    def this(self):
-        return Self(self._self, self._this)
+    def this(me):
+        return Self(me._self, me._this)
 
     @property
-    def next(self):
-        return Self(self._self, self._this._prototypes[1])
+    def next(me):
+        return Self(me._self, me._this._prototypes[1])
 
-    def __getattr__(self, name):
-        return find_attr(self._self, self._prox._prototypes, name)
+    def __getattr__(me, name):
+        return find_attr(me._self, me._prox._prototypes, name)
 
     # proxy
-    def __setattr__(self, name, val): return setattr(self._prox, name, value)
-    def __cmp__(self, rhs):           return cmp(self._prox, rhs)
-    def __call__(self, *arg, **kws):  return self._prox(*arg, **kws)
-    def __contains__(self, name):     return name in self._prox
-    def __getitem__(self, name):      return self._prox[name]
-    def __repr__(self):               return repr(self._prox)
+    def __setattr__(me, name, val): return setattr(me._prox, name, value)
+    def __cmp__(me, rhs):           return cmp(me._prox, rhs)
+    def __call__(me, *arg, **kws):  return me._prox(*arg, **kws)
+    def __contains__(me, name):     return name in me._prox
+    def __getitem__(me, name):      return me._prox[name]
+    def __repr__(me):               return repr(me._prox)
 
 class object(object_):
 
-    def __init__(self, *prototypes_or_functions, **attributes):
-        self._prototypes = (self,)
+    def __init__(me, *prototypes_or_functions, **attributes):
+        me._prototypes = (me,)
         for arg in prototypes_or_functions:
             if isinstance(arg, object):
-                self._prototypes += arg._prototypes
+                me._prototypes += arg._prototypes
             elif isinstance(arg, Self):
-                self._prototypes += arg._self._prototypes
+                me._prototypes += arg._self._prototypes
             elif isinstance(arg, FunctionType):
                 if arg.__code__.co_varnames[:1] == ('self',):
                     attributes[arg.__name__] = arg
@@ -62,27 +62,27 @@ class object(object_):
                 attributes = arg.__dict__
             elif isinstance(arg, type) or \
                     isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
-                self._prototypes += (arg,)
+                me._prototypes += (arg,)
             else:
                 raise Exception(
                     "arg '%s' must be a constructor, prototype, function or class"
                     % arg)
-        self.__dict__.update(attributes)
+        me.__dict__.update(attributes)
            
-    def __call__(self, *prototypes_or_functions, **attributes):
-        return object(self, *prototypes_or_functions, **attributes)
+    def __call__(me, *prototypes_or_functions, **attributes):
+        return object(me, *prototypes_or_functions, **attributes)
 
-    def __getattribute__(self, name):
+    def __getattribute__(me, name):
         if name.startswith("_"):
-            return object_.__getattribute__(self, name)
-        return find_attr(self, self._prototypes, name)
+            return object_.__getattribute__(me, name)
+        return find_attr(me, me._prototypes, name)
 
     #behave a bit dict'isch
-    def __getitem__(self, name):  return getattr(self, str(name)) 
-    def __contains__(self, name): return name in self.__dict__
-    def __repr__(self):           return repr(dict(self.__iter__()))
-    def __iter__(self):           return ((k,v) for k,v in \
-                                    self.__dict__.iteritems() if not k.startswith('_'))
+    def __getitem__(me, name):  return getattr(me, str(name)) 
+    def __contains__(me, name): return name in me.__dict__
+    def __repr__(me):           return repr(dict(me.__iter__()))
+    def __iter__(me):           return ((k,v) for k,v in \
+                                    me.__dict__.iteritems() if not k.startswith('_'))
 
 from autotest import autotest
 

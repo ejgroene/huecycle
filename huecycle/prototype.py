@@ -2,18 +2,6 @@ from types import FunctionType, MethodType, ClassType
 
 object_ = object # Yes, this module redefines the meaning of object
 
-def find_attr(prototypes, name, self):
-    for this in prototypes:
-        try:
-            attribute = object_.__getattribute__(this, name)
-        except AttributeError:
-            continue
-        if isinstance(attribute, FunctionType):
-            return MethodType(attribute, Self(self, this, self))
-        if isinstance(attribute, dict):
-            return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
-        return attribute
-
 class Self(object_):
 
     def __init__(me, _self, _this, _prox=None):
@@ -30,9 +18,8 @@ class Self(object_):
         return Self(me._self, me._this._prototypes[1])
 
     def __getattr__(me, name):
-        return find_attr(me._prox._prototypes, name, me._self)
+        return me._self.__getattribute__(name, me._prox._prototypes)
 
-    # proxy
     def __setattr__(me, name, val): return setattr(me._prox, name, value)
     def __cmp__(me, rhs):           return cmp(me._prox, rhs)
     def __call__(me, *arg, **kws):  return me._prox(*arg, **kws)
@@ -42,13 +29,13 @@ class Self(object_):
 
 class object(object_):
 
-    def __init__(me, *prototypes_or_functions, **attributes):
-        me._prototypes = (me,)
+    def __init__(self, *prototypes_or_functions, **attributes):
+        self._prototypes = (self,)
         for arg in prototypes_or_functions:
             if isinstance(arg, object):
-                me._prototypes += arg._prototypes
+                self._prototypes += arg._prototypes
             elif isinstance(arg, Self):
-                me._prototypes += arg._self._prototypes
+                self._prototypes += arg._self._prototypes
             elif isinstance(arg, FunctionType):
                 if arg.__code__.co_varnames[:1] == ('self',):
                     attributes[arg.__name__] = arg
@@ -62,27 +49,36 @@ class object(object_):
                 attributes = arg.__dict__
             elif isinstance(arg, type) or \
                     isinstance(arg, object_) and type(arg).__module__ != '__builtin__': 
-                me._prototypes += (arg,)
+                self._prototypes += (arg,)
             else:
                 raise Exception(
                     "arg '%s' must be a constructor, prototype, function or class"
                     % arg)
-        me.__dict__.update(attributes)
+        self.__dict__.update(attributes)
            
-    def __call__(me, *prototypes_or_functions, **attributes):
-        return object(me, *prototypes_or_functions, **attributes)
+    def __call__(self, *prototypes_or_functions, **attributes):
+        return object(self, *prototypes_or_functions, **attributes)
 
-    def __getattribute__(me, name):
+    def __getattribute__(self, name, prototypes=None):
         if name.startswith("_"):
-            return object_.__getattribute__(me, name)
-        return find_attr(me._prototypes, name, me)
+            return object_.__getattribute__(self, name)
+        for this in prototypes or self._prototypes:
+            try:
+                attribute = object_.__getattribute__(this, name)
+            except AttributeError:
+                continue
+            if isinstance(attribute, FunctionType):
+                return MethodType(attribute, Self(self, this, self))
+            if isinstance(attribute, dict):
+                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+            return attribute
 
     #behave a bit dict'isch
-    def __getitem__(me, name):  return getattr(me, str(name)) 
-    def __contains__(me, name): return name in me.__dict__
-    def __repr__(me):           return repr(dict(me.__iter__()))
-    def __iter__(me):           return ((k,v) for k,v in \
-                                    me.__dict__.iteritems() if not k.startswith('_'))
+    def __getitem__(self, name):  return getattr(self, str(name)) 
+    def __contains__(self, name): return name in self.__dict__
+    def __repr__(self):           return repr(dict(self.__iter__()))
+    def __iter__(self):           return ((k,v) for k,v in \
+                                    self.__dict__.iteritems() if not k.startswith('_'))
 
 from autotest import autotest
 

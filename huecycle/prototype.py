@@ -76,6 +76,106 @@ class object(python_object):
 from autotest import autotest
 
 @autotest
+def simple_object_assembled_manually():
+    a = object()
+    a.x = 1
+    assert a.x == 1
+    def f(self):
+        assert self.x == 1
+        assert self == a
+        return self
+    a.f = f
+    assert type(a.f) == MethodType
+    assert a.f() == a
+    b = object()
+    assert a != b
+
+@autotest
+def simple_object_with_old_style_class_syntax():
+    @object
+    class a:
+        x = 1
+        def f(self):
+            return self
+    assert type(a.f) == MethodType
+    assert a.f() == a
+    @object
+    class b:
+        pass
+    assert a != b
+
+@autotest
+def create_your_first_prototype():
+
+    @object
+    class creature:
+        legs = 4
+        def age(self):
+            return 2016 - self.birth_date
+
+    assert creature.legs == 4
+
+    @creature
+    class person:
+        legs = 2
+
+    assert person.legs == 2
+
+    @person
+    class pete:
+        birth_date = 1990
+
+    assert pete.legs == 2
+    assert pete.age() == 26
+
+@autotest
+def alternative_syntax_1():
+
+    creature = object(legs=4, age=lambda self: 2016 - self.birth_date)
+    assert creature.legs == 4
+
+    person = creature(legs=2)
+    assert person.legs == 2
+
+    pete = object(person, birth_date=1990)
+    assert pete.legs == 2
+    assert pete.age() == 26
+
+@autotest
+def alternative_syntax_2():
+
+    @object
+    def creature():
+        legs = 4
+        def age(self):
+            return 2016 - self.birth_date
+        def person(self):
+            def bear(self, year):
+                return self(birth_date=year)
+            return self(bear, legs=2)
+        return locals()
+
+    assert creature.legs == 4
+    
+    person = creature.person()
+    assert person.legs == 2
+
+    pete = person.bear(1990)
+    assert pete.age() == 26
+
+@autotest
+def anonymous_prototype_because_we_can():
+
+    @object(age=lambda self: 2016 - self.birth_date)
+    class person:
+        legs = 2
+    
+    pete = person(birth_date=1990)
+    
+    assert pete.legs == 2
+    assert pete.age() == 26
+
+@autotest
 def accept_noarg_ctor_function_creating_attributes():
     def f(not_self, a, b=10):
         pass
@@ -259,6 +359,9 @@ def lookup_function():
 
 @autotest
 def this_gives_access_to_object_func_is_found():
+
+    import this
+
     @object
     class A:
         a = 42

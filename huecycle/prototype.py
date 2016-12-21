@@ -84,6 +84,7 @@ def simple_object_assembled_manually():
         assert self.x == 1
         assert self == a
         return self
+    assert type(f) == FunctionType
     a.f = f
     assert type(a.f) == MethodType
     assert a.f() == a
@@ -470,6 +471,27 @@ def create_object_with_this():
     assert y.b == 42
     assert x.c == 14
     assert y.c == None
+
+#@autotest
+def private_functions(): # naah
+    @object
+    class a:
+        def f(self):
+            try:
+                return self._g()
+            except AttributeError:
+                return self.this._g()
+        def _g(self):
+            return "g"
+
+    assert a._g() == "?"
+
+    @a
+    class b:
+        pass
+
+    assert b.f() == "g"
+    assert b._g() == "?"
 
 @autotest
 def normal_python_classes_can_be_delegated_to():

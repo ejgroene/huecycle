@@ -26,5 +26,5 @@ def weather(url):
             last_observation = requests.get(url).json["current_observation"]
             last_observation_time = time822(last_observation["observation_time_rfc822"])
             delta_t =  avg_delta_t.send(2 * (now - last_observation_time))
-            print "Weather: %s, next update: +%ds (%s);" % (last_observation["weather"].lower(), delta_t, last_observation["observation_time"])
+            print("Weather: %s, next update: +%ds (%s);" % (last_observation["weather"].lower(), delta_t, last_observation["observation_time"]))
         yield CONDITIONS.get(last_observation["weather"].lower())

@@ -2,7 +2,7 @@ from PIL import Image, ImageStat
 from xyz2cct import XYZtoCCT
 from sys import argv
 from subprocess import Popen, PIPE
-from StringIO import StringIO
+from io import StringIO
 from time import sleep
 
 def capture_image(f=None):
@@ -11,7 +11,7 @@ def capture_image(f=None):
         data, errs = p.communicate()
         f = StringIO(data)
     rgb = Image.open(f)
-    print "Captured:", rgb
+    print("Captured:", rgb)
     return rgb
 
 
@@ -64,7 +64,7 @@ def analyze_sky():
         sum_t += t
         i += 1
     avg_t = sum_t / i
-    print "%d; %d" % (i, avg_t)
+    print("%d; %d" % (i, avg_t))
 
 while True:
     analyze_sky()

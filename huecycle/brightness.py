@@ -28,40 +28,40 @@ def CreateCycle():
     b = bri.send(time(7,00))
     assert b == 0, b
 
-    b = bri.send(time(7,01))
+    b = bri.send(time(7,0o1))
     assert b == 1, b
 
     clock.set(time(15,00))
-    b = bri.next()
+    b = next(bri)
     assert b == 255, b
 
     clock.set(time(22,59))
-    b = bri.next()
+    b = next(bri)
     assert b == 1, b
 
     clock.set(time(23,00))
-    b = bri.next()
+    b = next(bri)
     assert b == 0, b
 
-    clock.set(time(23,01))
-    b = bri.next()
+    clock.set(time(23,0o1))
+    b = next(bri)
     assert b == 0, b
 
     clock.set(time(23,59))
     b = bri.send(None)
     assert b == 0, b
 
-    clock.set(time(0,01))
-    b = bri.next()
+    clock.set(time(0,0o1))
+    b = next(bri)
     assert b == 0, b
 
-    b = bri.send(time(0,01))
+    b = bri.send(time(0,0o1))
     assert b == 0, b
 
     b = bri.send(time(6,59))
     assert b == 0, b
 
-    b = bri.send(time(7,01))
+    b = bri.send(time(7,0o1))
     assert b == 1, b
 
     b = bri.send(time(15,00))

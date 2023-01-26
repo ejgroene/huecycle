@@ -3,14 +3,14 @@ from prototype import object
 
 def delete_all_sensors(api):
     sensors = get(api + "/sensors")
-    for k, v in ((k, v) for k, v in sensors.iteritems() if v["manufacturername"] == "ErikGroeneveld"):
-        print "Deleting sensor", k
+    for k, v in ((k, v) for k, v in sensors.items() if v["manufacturername"] == "ErikGroeneveld"):
+        print("Deleting sensor", k)
         delete(api + "/sensors/%s" % k)
 
 @object
 def sensor():
     def path(self):
-        return "/sensors/%s" % self.id
+        return "/resource/device/%s" % self.id
 
     def url(self):
         return self.baseurl + self.path()
@@ -62,10 +62,18 @@ from misc import autotest
 from config import LOCAL_HUE_API
 
 @autotest
-def ReadTap():
-    tap1 = tap(id=2)
-    assert tap1.id == 2
-    assert tap1.path() == "/sensors/2"
+def list_sensors():
+    devices = device(baseurl=LOCAL_HUE_API)
+    all_devices = devices.list()
+    assert [] == all_devices, all_devices
+
+
+    
+@autotest
+def ReadSmartButton():
+    tap1 = tap(id="2e8fe788-8f2d-48eb-8de2-30931635a062")
+    assert tap1.id == "2e8fe788-8f2d-48eb-8de2-30931635a062"
+    assert tap1.path() == "/resource/device/2e8fe788-8f2d-48eb-8de2-30931635a062", tap1.path()
     tap1.baseurl = LOCAL_HUE_API
     state = tap1.state()
     assert "lastupdated" in state

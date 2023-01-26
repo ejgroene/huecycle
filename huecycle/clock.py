@@ -8,6 +8,8 @@ class clock(object):
     def set(self, t=None):
         self._d = t.date() if isinstance(t, datetime) else t if isinstance(t, date) else None
         self._t = t.time() if isinstance(t, datetime) else t if isinstance(t, time) else None
+        if self._t == time(0, 0, 0): # mimic Python 2 behaviour
+            self._t = datetime.now().time()
 
     def nexttime(self, h, m=0, s=0):
         if isinstance(h, datetime):
@@ -74,16 +76,16 @@ def SetDateOnly():
     t0 = datetime.now().time()
     t  = clock.time()
     t1 = datetime.now().time()
-    assert t0 < t < t1
+    assert t0 <= t <= t1
 
 @autotest
 def SetDateOnlyWithZeroTime():
+    t0 = datetime.now().time()
     clock.set(datetime(2301, 9, 15))
     assert clock.date() ==  date(2301, 9, 15), clock.date()
-    t0 = datetime.now().time()
     t  = clock.time()
     t1 = datetime.now().time()
-    assert t0 < t < t1
+    assert t0 <= t <= t1
 
 @autotest
 def SetTimeOnly():

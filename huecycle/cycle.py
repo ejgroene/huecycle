@@ -6,7 +6,7 @@ from tap import tap
 
 
 def loop(light, tap, bri_phase_map):
-    from itertools import izip
+    
     from phase import phase, sinus, charge, constant
     from sunphase import get_ct_phase, rise_and_set, MIREK
     last_bri = last_ct = 0
@@ -14,22 +14,22 @@ def loop(light, tap, bri_phase_map):
     t_wake = time(7,15)
     t_sleep = time(22,15)
     while True:
-        t_rise, t_set = sun.next()
+        t_rise, t_set = next(sun)
         t_now = datetime.now().time()
         ct_phase = get_ct_phase(t_wake, t_sleep, t_rise, t_set, t_now)
         if t_wake <= t_now < t_sleep:
             bri_phase = phase(t_wake, t_sleep, bri_phase_map, 0, 255)
         else:
             bri_phase = phase(t_sleep, t_wake, constant(0), 0, 0)
-        for color_temp, brightness in izip(ct_phase, bri_phase):
-            s = tap.next()
-            print ".",
+        for color_temp, brightness in zip(ct_phase, bri_phase):
+            s = next(tap)
+            print(".", end=' ')
             if color_temp != last_ct or brightness != last_bri:
                 last_bri = brightness
                 last_ct = color_temp
                 #if s == 17: # button 2 is auto
                 light.send(dict(ct=color_temp, bri=brightness, on=True))
-                print "\n%s; %dK; %.1f%% tap=%d" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55, s),
+                print("\n%s; %dK; %.1f%% tap=%d" % (datetime.now().strftime("%a %H:%M:%S"), MIREK/color_temp, brightness/2.55, s), end=' ')
             stdout.flush()
             sleep(2.0)
         sleep(1.0)

@@ -8,7 +8,7 @@ def delete_rule(API, rule_id):
 
 def delete_all_rules(API):
     for rule in get_rules(API):
-        print "Deleting rule %s..." % rule
+        print("Deleting rule %s..." % rule)
         delete_rule(API, rule)
 
 def button_hit(tapid, button):

@@ -1,17 +1,17 @@
-import rfc822
+import email.utils as rfc822
 from clock import clock
 
 def autostart(f):
     def g(*args, **kwargs):
         h = f(*args, **kwargs)
-        h.next()
+        next(h)
         return h
     return g
 
 def identify(f):
     def g(*args, **kwargs):
         h = f(*args, **kwargs)
-        h.next()
+        next(h)
         h.send(h)
         return h
     return g
@@ -53,7 +53,10 @@ def find_next_change(g, timeout=30):
         while v == prev and dt < timeout:
             dt += 1
             t += timedelta(seconds=1)
-            v = g.send(t)
+            try:
+                v = g.send(t)
+            except StopIteration:
+                return
 
 
 from autotest import autotest
@@ -77,15 +80,15 @@ def FindNextChange():
     t5 = t0 + timedelta(seconds=5)
     t6 = t0 + timedelta(seconds=6)
     g = find_next_change(src())
-    t, v = g.next()
+    t, v = next(g)
     assert v == 1
     assert t0 <= t <= t1, (t0, t, t1)
     assert ts == [t], ts
-    t, v = g.next()
+    t, v = next(g)
     assert v == 2, v
     assert t1 <= t <= t3
     assert ts[-1] == t
-    t, v = g.next()
+    t, v = next(g)
     assert v == 3
     assert t4 <= t <= t6
     assert ts[-1] == t

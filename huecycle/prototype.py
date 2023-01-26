@@ -1,5 +1,5 @@
-from types import FunctionType, MethodType, ClassType
-from inspect import getargspec, isfunction, isclass
+from types import FunctionType, MethodType
+from inspect import getargspec, isfunction, isclass, isbuiltin
 
 python_object = object # Yes, this module redefines the meaning of object
 
@@ -21,8 +21,8 @@ class Self(python_object):
     def __getattr__(me, name):
         return me._self.__getattribute__(name, me._prox._prototypes)
 
-    def __setattr__(me, name, val): return setattr(me._prox, name, value)
-    def __cmp__(me, rhs):           return cmp(me._prox, rhs)
+    def __setattr__(me, name, val): return setattr(me._prox, name, val)
+    def __eq__(me, rhs):            return me._prox == rhs # python 3
     def __call__(me, *arg, **kws):  return me._prox(*arg, **kws)
     def __contains__(me, name):     return name in me._prox
     def __getitem__(me, name):      return me._prox[name]
@@ -37,13 +37,11 @@ class object(python_object):
                 attributes[arg.__name__] = arg
             elif isfunction(arg) and not getargspec(arg).args:  # f(): ctor
                 attributes.update(arg())
-            elif isinstance(arg, ClassType):            # old style class: ctor
+            elif isclass(arg):                          # new style class: prototype
                 attributes.update(arg.__dict__)
             elif hasattr(arg, '_prototypes'):           # other object: prototype
                 self._prototypes += arg._prototypes
-            elif isclass(arg):                          # new style class: prototype
-                self._prototypes += (arg,)
-            elif isinstance(arg, python_object) and type(arg).__module__ != '__builtin__': 
+            elif not (isfunction(arg) or isbuiltin(arg) or isinstance(arg, (str,))):
                 self._prototypes += (arg,)              # new style object: prototype
             else:
                 raise Exception("not a valid argument: %s" % arg)
@@ -60,7 +58,7 @@ class object(python_object):
             if isfunction(attribute):
                 return MethodType(attribute, Self(self, this, self))
             if isinstance(attribute, dict):
-                return object(self, **dict((str(k),v) for k,v in attribute.iteritems()))
+                return object(self, **dict((str(k),v) for k,v in attribute.items()))
             return attribute
 
     def __call__(self, *prototypes_or_functions, **attributes):
@@ -71,7 +69,7 @@ class object(python_object):
     def __contains__(self, name): return name in self.__dict__
     def __repr__(self):           return repr(dict(self.__iter__()))
     def __iter__(self):           return ((k,v) for k,v in \
-                                    self.__dict__.iteritems() if not k.startswith('_'))
+                                    self.__dict__.items() if not k.startswith('_'))
 
 from autotest import autotest
 
@@ -82,7 +80,7 @@ def simple_object_assembled_manually():
     assert a.x == 1
     def f(self):
         assert self.x == 1
-        assert self == a
+        assert self == a, (self, a)
         return self
     assert type(f) == FunctionType
     a.f = f
@@ -115,12 +113,13 @@ def create_your_first_prototype():
             return 2016 - self.birth_date
 
     assert creature.legs == 4
+    print('===', creature)
 
     @creature
     class person:
         legs = 2
 
-    assert person.legs == 2
+    assert person.legs == 2, person.legs
 
     @person
     class pete:
@@ -184,7 +183,7 @@ def accept_noarg_ctor_function_creating_attributes():
         object(f)
         assert False
     except Exception as e:
-        assert "not a valid argument:" in str(e), str(e)
+        assert "not a valid argument:" in str(e), type(e)
     def g(a, b):
         pass
     try:

@@ -27,20 +27,20 @@ def bridge():
     def delete_groups(self, name=''):
         for group in self.groups():
             if name.lower() in group.name.lower():
-                print "Deleting group", group.name
+                print("Deleting group", group.name)
                 delete(group.url())
 
     def sensors(self):
         sensors = self(path=lambda self: self.up.path() + "/sensors")
-        for id, attrs in sensors.read().iteritems():
+        for id, attrs in sensors.read().items():
             yield sensors(path=lambda self: self.up.path() + "/%s" % id, id=int(id), **attrs)
 
     def sensor(self, name):
-        return (s for s in self.sensors() if name.lower() in s.name.lower()).next()
+        return next((s for s in self.sensors() if name.lower() in s.name.lower()))
 
     def groups(self):
         grps = self(path=lambda self: self.up.path() + "/groups")
-        for id, attrs in grps.read().iteritems():
+        for id, attrs in grps.read().items():
             yield grps(id=id, path=lambda self: self.up.path() + "/%s" % self.id, **attrs)
 
     def rules(self):
@@ -49,12 +49,12 @@ def bridge():
             def path(self):
                 return "/rules"
             return locals()
-        for id, attrs in rules.read().iteritems():
+        for id, attrs in rules.read().items():
             yield rules(id=int(id), **attrs)
 
     def lights(self, name=None):
         lights = self(path=lambda self: self.up.path() + "/lights")
-        for id, attrs in lights.read().iteritems():
+        for id, attrs in lights.read().items():
             if name and name.lower() not in attrs["name"].lower():
                 continue
             def send(self, **kw):
@@ -80,8 +80,8 @@ def bridge():
 
     def delete_all_scenes(self):
         scenes = self(path=lambda self: self.up.path() + "/scenes")
-        for id in scenes.read().keys():
-            print "Deleting scene:", id
+        for id in list(scenes.read().keys()):
+            print("Deleting scene:", id)
             # scene cannot be deleted, they are GC'ed
             #delete(scenes.url() + "/%s" % id)
 
@@ -105,7 +105,7 @@ def ConnectBridge():
 @autotest
 def GetSensors():
     b = bridge(baseurl=LOCAL_HUE_API)
-    sensor = (sensor for sensor in b.sensors() if sensor.name == "Daylight").next()
+    sensor = next((sensor for sensor in b.sensors() if sensor.name == "Daylight"))
     assert sensor.name == "Daylight", sensor
     assert sensor.config.on == True
 
@@ -120,7 +120,7 @@ def GetRules():
     b = bridge(baseurl=LOCAL_HUE_API)
     b.create_rule("-a-test-rule-", [{"address":"/sensors/1/state/daylight","operator":"dx"}],
                 [{"address":"/groups/0/action","method":"PUT","body":{"on": True}}])
-    rule = (r for r in b.rules() if r.name == "-a-test-rule-").next()
+    rule = next((r for r in b.rules() if r.name == "-a-test-rule-"))
     assert "-a-test-rule-" in rule.name, rule.name
 
 @autotest
@@ -128,7 +128,7 @@ def GetLights():
     b = bridge(baseurl=LOCAL_HUE_API)
     lights = b.lights("stud")
     assert lights
-    l1 = lights.next()
+    l1 = next(lights)
     assert l1.id == 1, l1.id
     assert l1.name == "Studeerkamer-buro (test)"
     assert l1.modelid == "LCT001"
@@ -152,14 +152,14 @@ def GetLightsByName():
 @autotest
 def ExtendedCCT():
     b = bridge(baseurl=LOCAL_HUE_API)
-    light = b.lights("test").next()
+    light = next(b.lights("test"))
     light.send(ct=10000)
-    light = b.lights("test").next()
+    light = next(b.lights("test"))
     assert light.state["hue"] == 46920, light.state["hue"]
     assert light.state["sat"] == 254, light.state["sat"]
 
     light.send(ct=1000)
-    light = b.lights("test").next()
+    light = next(b.lights("test"))
     assert light.state["hue"] == 0, light.state["hue"]
     assert light.state["sat"] == 254, light.state["sat"]
 
@@ -170,7 +170,7 @@ def FindGroups():
     groups = list(b.groups())
     assert groups == [], groups
     b.create_group("test-name", [1,3,5])
-    group = (b.groups()).next()
+    group = next((b.groups()))
     assert group.name == "test-name", group
     assert group.type == "LightGroup", group
     assert group.lights == ['1', '3', '5'], group

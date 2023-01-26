@@ -83,7 +83,7 @@ def mockbridge(self):
     pass
 
 def find(source, name):
-    return (o for o in source if o.name == name).next()
+    return next((o for o in source if o.name == name))
 
 
 @autotest
@@ -179,7 +179,7 @@ def ExternalStatus():
     tap = tap_control(bridge=b, id=2, lights=(object(id=1, send=lambda self, **_: None,type="Dimmable"),))
     tap.init()
     def status():
-        return (s for s in b.sensors() if s.id == tap.status.id).next()
+        return next((s for s in b.sensors() if s.id == tap.status.id))
     assert status().state["status"] == 0
     tap.send(bri=95)
     assert status().state["status"] == 0

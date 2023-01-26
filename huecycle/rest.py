@@ -11,14 +11,17 @@ def try_forever(method, *args, **kwargs):
     global total_reqs
     total_reqs += 1
     if total_reqs % 100 == 0:
-        print " * requests/second:", total_reqs / (time() - start_time)
+        print(" * requests/second:", total_reqs / (time() - start_time))
     r = None
     while r is None:
         # Hue is so unreliable, we just keep trying....
         try:
-            r = method(*args, **kwargs)
+            r = method(*args, verify=False,
+                    # TODO extract
+                    headers={'hue-application-key': 'IW4mOZWMTo1jrOqZEd66fbGoc7HWsiblPd8r2Qwt'},
+                    **kwargs)
         except requests.exceptions.RequestException as e:
-            print e, args, kwargs
+            print(e, args, kwargs)
             sleep(5)
     assert r.status_code == 200, r
     return r
@@ -51,5 +54,5 @@ def put(url, **kwargs):
 
 def get(url):
     r = try_forever(requests.get, url)
-    return check_status(r.json)
+    return check_status(r.json())
 

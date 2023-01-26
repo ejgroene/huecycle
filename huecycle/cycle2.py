@@ -35,7 +35,7 @@ tap_keuken.init()
 tap_woonkamer = tap_control(bridge=local_bridge, id=s2.id, lights=tuple(local_bridge.lights("woonkamer")))
 tap_woonkamer.init()
 
-light_studeer = (local_bridge.lights("studeer")).next()
+light_studeer = next((local_bridge.lights("studeer")))
 lights_all = (light_studeer, tap_keuken, tap_woonkamer)
 
 def bed_time():
@@ -57,10 +57,10 @@ ct_cycle = find_next_change(ede.ct_cycle(wake_time, bed_time))
 
 def process_events(lights, events, attr):
     while True:
-        t, v = events.next()
-        print "Next %s event at:" % attr, t
+        t, v = next(events)
+        print("Next %s event at:" % attr, t)
         yield t
-        print "     setting %s:" % attr, v
+        print("     setting %s:" % attr, v)
         for light in lights:    
             light.send(**{attr:v})
 

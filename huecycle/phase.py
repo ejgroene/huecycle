@@ -97,7 +97,7 @@ def ChargeCurve():
 @autotest
 def CurrentTimeWhenNoneGiven():
     p = phase(0, 24, linear(), 1000, 9000)
-    x = p.next()
+    x = next(p)
     assert 1000 < x < 9000, x
 
 @autotest
@@ -116,14 +116,14 @@ def NightlyHours():
     assert x == 1000, x
     x = p.send(time(23,59,59))
     assert x == 2600, x
-    x = p.send(time( 0,00,01))
+    x = p.send(time( 0,00,0o1))
     assert x == 2600, x
     x = p.send(time( 7,59,59))
     assert x == 9000, x
     x = p.send(time( 8,00,00))
     assert x == 9000, x
     try:
-        p.send(time( 8,00,01))
+        p.send(time( 8,00,0o1))
         assert False
     except StopIteration:
         pass
@@ -173,7 +173,7 @@ def Stop():
     except StopIteration:
         pass
     try:
-        p.send(time(21,00,01))
+        p.send(time(21,00,0o1))
         assert False
     except StopIteration:
         pass

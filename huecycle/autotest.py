@@ -1,9 +1,9 @@
 from numbers import Number
 
 def autotest(f):
-    print "%s.%s" % (f.__module__, f.__name__),
+    print("%s.%s" % (f.__module__, f.__name__), end=' ')
     f()
-    print " Ok."
+    print(" Ok.")
 
 class any_number(object):
     def __init__(self, lo, hi):

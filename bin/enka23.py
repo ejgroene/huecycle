@@ -20,16 +20,16 @@ def print_for_date(date):
         sun.compute(ede)
         if sun.alt > 0:
             t = localtime(ede.date)
-            print "%s  azimut:%s  hoogte:%s  schaduw:%d  (nok:%d)" % (t, sun.az, sun.alt, h_bos/tan(sun.alt), (h_bos-h_nok)/tan(sun.alt))
+            print("%s  azimut:%s  hoogte:%s  schaduw:%d  (nok:%d)" % (t, sun.az, sun.alt, h_bos/tan(sun.alt), (h_bos-h_nok)/tan(sun.alt)))
 
-print "== winter =="
+print("== winter ==")
 print_for_date("2014/12/21")
-print
-print "== lente =="
+print()
+print("== lente ==")
 print_for_date("2014/03/21")
-print
-print "== zomer =="
+print()
+print("== zomer ==")
 print_for_date("2014/06/21")
-print
-print "== herfst =="
+print()
+print("== herfst ==")
 print_for_date("2014/09/21")

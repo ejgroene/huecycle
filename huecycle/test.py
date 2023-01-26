@@ -1,15 +1,22 @@
 #!/usr/bin/env python
+
+# order of increasing dependency
+import autotest
 import prototype
-import alarm
-import bridge
 import clock
+import misc
 import controllers
 import extended_cct
-import misc
-import phase
+import alarm
 import rest
-import rules
-import sensors
+import phase
+import brightness
 import sunphase
+
+
+# local or outdated
 import tap
 import cycle
+import sensors
+import bridge
+import rules

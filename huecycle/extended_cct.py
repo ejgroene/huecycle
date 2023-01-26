@@ -30,7 +30,7 @@ def extend_cct(**kw):
         kw["hue"] = int(0.5 + interpolate(1500, 2000, ct, HUE_AT_1500K, HUE_AT_2000K))
         kw["sat"] = int(0.5 + interpolate(2000, 1500, ct, SAT_AT_2000K, SAT_AT_1500K))
     elif ct < 6501:
-        kw["ct"] = MIREK/ct
+        kw["ct"] = MIREK//ct
     else:
         kw["hue"] = int(0.5 + interpolate(6500, 10000, ct, HUE_AT_6500K, HUE_AT_10000K))
         kw["sat"] = int(0.5 + interpolate(6500, 10000, ct, SAT_AT_6500K, SAT_AT_10000K))
@@ -46,7 +46,7 @@ def testCheckUpperBoundary():
     try:
         extend_cct(ct=10001)
         raise Exception("must raise")
-    except Exception, e:
+    except Exception as e:
         assert "CT value not supported: 10001" == str(e), str(e)
 
 @autotest
@@ -106,5 +106,5 @@ def testCheckUpperBoundary():
     try:
         extend_cct(ct=99)
         raise Exception("must raise")
-    except Exception, e:
+    except Exception as e:
         assert "CT value not supported: 99" == str(e), str(e)

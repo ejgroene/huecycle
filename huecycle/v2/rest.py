@@ -1,4 +1,4 @@
-from prototype import object
+from prototype3 import prototype
 import requests
 from json import dumps
 from time import sleep, time
@@ -55,8 +55,7 @@ def put(url, **kwargs):
 
 
 
-@object
-class rest:
+class rest(prototype):
     """ requires baseurl """
 
     def url(self):

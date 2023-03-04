@@ -1,7 +1,8 @@
-from autotest import autotest
 from inspect import isfunction, signature
 from functools import partial
 from collections import ChainMap
+import autotest
+test = autotest.get_tester(__name__)
 
 
 class meta(type):
@@ -10,33 +11,36 @@ class meta(type):
         if name == 'prototype':
             return super().__new__(claz, name, bases, namespace)
         if bases == (prototype,):
-            return prototype(name, (), namespace | attributes)
-        return prototype(name, bases, namespace | attributes)
+            bases = ()
+        return prototype(name, bases, namespace, **attributes)
         
 
 class prototype(dict, metaclass=meta):
-    """ root or terminal for all prototype, singleton """
 
-    __slots__ = ('prototypes', 'id')
+    __slots__ = ('prototypes', '__id__')
 
     def __mro_entries__(this, bases):
         return bases
 
-    def __init__(this, id='<anonymous>', prototypes=(), namespace=None, **attributes):
+    def __init__(this, __id__='<anonymous>', prototypes=(), namespace=None, **attributes):
+        assert isinstance(__id__, str), __id__
         if namespace:
             this.prototypes = namespace.pop('__orig_bases__', prototypes)
-            this.id = namespace.pop('__module__') + '.' + namespace.pop('__qualname__')
+            this.__id__ = namespace.pop('__module__') + '.' + namespace.pop('__qualname__')
             super().__init__(namespace, **attributes)
         else:
             this.prototypes = prototypes
-            this.id = id
+            this.__id__ = __id__
             super().__init__(attributes)
 
     def __getattr__(this, name, self=None):
         self = this if self is None else self
         try:
             attribute = super().__getitem__(name)
+            found = True
         except KeyError:
+            found = False
+        if not found:
             for p in this.prototypes:
                 try:
                     if isinstance(p, prototype):
@@ -47,14 +51,17 @@ class prototype(dict, metaclass=meta):
                 except AttributeError:
                     continue
             else:
-                raise AttributeError
+                raise AttributeError(name)
         if isfunction(attribute):
             s = signature(attribute)
             attribute.__signature__ = s # cache
             if 'this' in s.parameters:
-                attribute = partial(attribute, self, this)
-            else:
-                attribute = partial(attribute, self)
+                return partial(attribute, self, this)
+            return partial(attribute, self)
+        if type(attribute) is dict:
+            attribute = prototype(self.__id__ + '.' + name, **attribute)
+            setattr(this, name, attribute)
+            return attribute
         return attribute
 
     def __setattr__(this, name, value):
@@ -63,13 +70,13 @@ class prototype(dict, metaclass=meta):
         else:
             this[name] = value
 
-    def __call__(self, **attributes):
-        return prototype(prototypes=(self,), **attributes)
+    def __call__(self, __id__='<anonymous>', **attributes):
+        return prototype(__id__, (self,), **attributes)
 
     def __eq__(self, rhs):
         if isinstance(rhs, prototype):
             return self.prototypes == rhs.prototypes \
-               and self.id == rhs.id \
+               and self.__id__ == rhs.__id__ \
                and super().__eq__(rhs)
         return super().__eq__(rhs)
 
@@ -77,7 +84,7 @@ class prototype(dict, metaclass=meta):
         return not self.__eq__(rhs)
 
     def __str__(self):
-        return self.id + super().__str__()
+        return f"{self.__id__}{super().__str__()}"
 
     @property
     def dict(self):
@@ -87,11 +94,11 @@ class prototype(dict, metaclass=meta):
         return self.__getattr__(name)
 
 
-@autotest
+@test
 def prototype_itself():
     assert isinstance(prototype, meta)
     assert isinstance(prototype, type)
-    assert ('prototypes', 'id') == prototype.__slots__
+    assert ('prototypes', '__id__') == prototype.__slots__
     assert prototype.__bases__ == (dict,)
     assert not hasattr(prototype, 'doesnotexists')
 
@@ -102,10 +109,10 @@ def assert_invariants(o):
     assert '__qualname__' not in o
     assert '__bases__' not in o
     assert hasattr(o, 'prototypes')
-    assert hasattr(o, 'id')
+    assert hasattr(o, '__id__')
     assert not hasattr(o, 'doesnotexists')
 
-@autotest
+@test
 def create_prototype():
     class creature(prototype):
         legs = 4
@@ -115,10 +122,10 @@ def create_prototype():
     assert creature['legs'] == 4
     assert {'legs': 4} == creature, creature
     fullname = __name__+'.'+'create_prototype.<locals>.creature'
-    assert fullname == creature.id, creature.id
+    assert fullname == creature.__id__, creature.__id__
     assert fullname+"{'legs': 4}" == str(creature), creature
 
-@autotest
+@test
 def set_attribute():
     class creature(prototype):
         birth = 2000
@@ -128,7 +135,7 @@ def set_attribute():
     creature['birth'] = 2014
     assert creature.birth == 2014
 
-@autotest
+@test
 def create_object_with_prototype():
     class creature(prototype):
         legs = 4
@@ -145,7 +152,7 @@ def create_object_with_prototype():
     assert creature.legs == 4
     assert str(person).endswith("create_object_with_prototype.<locals>.person{'birth': 2003, 'legs': 2}")
 
-@autotest
+@test
 def object_with_more_prototypes():
     class creature(prototype):
         birth = 2001
@@ -166,7 +173,7 @@ def object_with_more_prototypes():
     creature.birth = 2020
     assert mammal.birth == 2020
     
-@autotest
+@test
 def functions_methods():
     class creature(prototype):
         def age(self):
@@ -176,7 +183,7 @@ def functions_methods():
     creature.birth = 2020
     assert 3 == age()
 
-@autotest
+@test
 def proper_self():
     class janssen(prototype):
         name = "janssen"
@@ -187,7 +194,7 @@ def proper_self():
     fullname = karel.fullname()
     assert "karel janssen" == fullname, fullname
 
-@autotest
+@test
 def optional_attributes():
     class automobile(prototype, wheels=4):
         pass
@@ -200,7 +207,7 @@ def optional_attributes():
     assert (automobile,) == volvo.prototypes
     assert 3 == volvo.wheels
 
-@autotest
+@test
 def clone_directly_by_calling():
     automobile = prototype(wheels=4)
     assert_invariants(automobile)
@@ -211,7 +218,7 @@ def clone_directly_by_calling():
     assert 3 == volvo.wheels
     assert (automobile,) == volvo.prototypes, volvo.prototypes
    
-@autotest
+@test
 def prototype_equality_using_class():
     class creature(prototype):
         birth = 2001
@@ -231,55 +238,70 @@ def prototype_equality_using_class():
     class dog2(mammal):
         pass
     assert dog1 != dog2                     # NB!
-    assert dog1.id != dog2.id
-    assert dog1.id == __name__+'.'+'prototype_equality_using_class.<locals>.dog1', dog1.id
-    assert dog2.id == __name__+'.'+'prototype_equality_using_class.<locals>.dog2', dog1.id
+    assert dog1.__id__ != dog2.__id__
+    assert dog1.__id__ == __name__+'.'+'prototype_equality_using_class.<locals>.dog1', dog1.__id__
+    assert dog2.__id__ == __name__+'.'+'prototype_equality_using_class.<locals>.dog2', dog1.__id__
     try:
         assert {dog1}
         assert False
     except TypeError as e:
         assert "unhashable type: 'prototype'" == str(e)
 
-@autotest
+@test
 def prototype_equality_anonymous_cloning():
     creature = prototype(birth=2001)
     vertibrate = creature(has_spine=True)
     assert creature != vertibrate
     warmblooded = creature(temperature=36)
     assert warmblooded != vertibrate
-    mammal = prototype(warmblooded, vertibrate)
+    mammal = prototype(prototypes=(warmblooded, vertibrate))
     assert mammal != warmblooded
     assert mammal != vertibrate
     dog1 = mammal()
     assert dog1 != mammal
     dog2 = mammal()
     assert dog1 == dog2                       # NB!
-    assert dog1.id == dog2.id
+    assert dog1.__id__ == dog2.__id__
     dog1.name = 'Oscar'
     assert dog1 != dog2
-    assert dog1.id == dog2.id
+    assert dog1.__id__ == dog2.__id__
     try:
         assert {dog1}
         assert False
     except TypeError as e:
         assert "unhashable type: 'prototype'" == str(e)
 
-@autotest
+@test
 def all_values_in_one_dict():
     creature = prototype(birth=2001)
     vertibrate = creature(has_spine=True)
     assert vertibrate.prototypes == (creature,), vertibrate.prototypes
-    # NB implementing keys/__getitem__ does not work due to Pyton optimizing dicts
+    # NB Python ignores keys/__getitem__ on **<dict> so no **vertibrate
     d = dict(**vertibrate.dict)
     assert {'has_spine': True, 'birth': 2001} == d, d
     dog = vertibrate(birth=2013)
     d = dict(**dog.dict)
     assert {'has_spine': True, 'birth': 2013} == d, d
 
-@autotest
+@test
 def delegete_to_python_objects():
     # makes no sense, but it is possible
     woordjes = prototype(prototypes=("aap",))
     assert woordjes.prototypes == ("aap",), woordjes
     assert True == woordjes.startswith('aa')
 
+@test
+def turn_dict_into_prototype():
+    light = prototype("light", props={'a': 42})
+    assert light.__id__ == 'light'
+    props = light.props
+    assert props == {'a': 42}, props
+    assert isinstance(props, prototype)
+    assert props.a == 42
+    assert props['a'] == 42
+    assert props.__id__ == 'light.props', props.__id__
+    props['b'] = 43
+    assert props.b == 43
+    props_again = light.props
+    assert props_again == {'a': 42, 'b': 43}, props_again
+    

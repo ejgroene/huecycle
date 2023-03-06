@@ -58,9 +58,11 @@ class prototype(dict, metaclass=meta):
             if 'this' in s.parameters:
                 return partial(attribute, self, this)
             return partial(attribute, self)
+        if hasattr(attribute, '__get__'):
+            attribute = attribute.__get__(self)
         if type(attribute) is dict:
             attribute = prototype(self.__id__ + '.' + name, **attribute)
-            setattr(this, name, attribute)
+            setattr(self, name, attribute) # HMMM, caching a computed attibute?????
             return attribute
         return attribute
 
@@ -304,4 +306,22 @@ def turn_dict_into_prototype():
     assert props.b == 43
     props_again = light.props
     assert props_again == {'a': 42, 'b': 43}, props_again
-    
+   
+@test
+def properties():
+    class aap(prototype):
+        n = 10
+        @property
+        def one(self):
+            return f"<{self.n}>"
+        two = property(lambda self: f">{self.n}<")
+        tri = property("({n})".format_map)              # nice idiom ?
+        def fort(self):
+            return f"one:{self.one}"
+    test.eq('<10>', aap.one)
+    test.eq('>10<', aap.two)
+    test.eq('(10)', aap.tri)
+    test.eq('one:<10>', aap.fort())
+    class noot(aap):
+        n = 11
+    test.eq('<11>', noot.one)

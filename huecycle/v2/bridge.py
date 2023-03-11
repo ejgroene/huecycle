@@ -1,7 +1,8 @@
 import requests
 import time
-from prototype3 import prototype
 from functools import partialmethod
+from prototype3 import prototype
+import utils
 
 import autotest
 test = autotest.get_tester(__name__)
@@ -54,7 +55,25 @@ class bridge(prototype):
                 continue
             for event in response.json():
                 for data in event['data']:
-                    yield prototype(data['type'], **data)
+                    yield self.filter_event(data)
+
+
+    def filter_event(self, event):
+        update = event.get(event['type']) or \
+                 {k:event[k] for k in event if k not in 'type owner id_v1'}
+        return self.index[event['id']], prototype('update', **update)
+
+
+    def byname(self):
+        byname = {}
+        for r in self.index.values():
+            if qname := utils.get_qname(r, self.index):
+                r['qname'] = qname
+                if qname in byname:
+                    print(test.diff2(byname[qname], r))
+                    raise Exception("Duplicate name")
+                byname[qname] = r
+        return byname
 
 
 @test
@@ -130,7 +149,7 @@ def event_stream():
                     {'id': 'event3', 'type': 'closing'},
                 ]},
             ])
-    b = bridge(baseurl='k9', username='K1', request=request)
+    b = bridge(baseurl='k9', username='K1', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
     test.eq({'id': 'event1', 'type': 'happening'}, next(events))
     test.eq({'id': 'event2', 'type': 'party'}, next(events))
@@ -154,7 +173,7 @@ def handle_timeout():
                     {'id': 'event1', 'type': 'happening'},
                 ]},
             ])
-    b = bridge(baseurl='err', username='my', request=request)
+    b = bridge(baseurl='err', username='my', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
     test.eq({'id': 'event1', 'type': 'happening'}, next(events))
     test.eq({'id': 'event1', 'type': 'happening'}, next(events))
@@ -178,9 +197,26 @@ def wait_a_sec_on_connectionerror():
                     {'id': 'event1', 'type': 'happening'},
                 ]},
             ])
-    b = bridge(baseurl='err', username='my', request=request)
+    b = bridge(baseurl='err', username='my', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
     test.eq({'id': 'event1', 'type': 'happening'}, next(events))
     test.eq({'id': 'event1', 'type': 'happening'}, next(events))
     test.eq(3, len(call_times))
     test.gt(call_times[2] - call_times[1], 0.9)
+
+@test
+def filter_event_data():
+    b = bridge()
+    b.index['1'] = {'id': '1', 'resource': 'A'}
+    owner, update = b.filter_event(prototype(type='A', id='1', on=False))
+    test.eq({'id': '1', 'resource': 'A'}, owner)
+    test.eq(False, update.on)
+
+@test
+def byname():
+    b = bridge()
+    mies = {'id': '1', 'type': 'girl', 'metadata': {'name': 'mies'}}
+    b.index['1'] = mies
+    byname = b.byname()
+    test.eq(mies, byname['girl:mies'])
+

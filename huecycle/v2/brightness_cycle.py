@@ -32,21 +32,32 @@ day = timedelta(hours=24)
 
 
 class cct_cycle:
-    def __init__(self, lat, lon, t_wake, t_sleep, v_min, v_max):
-        self.t_wake  = t_wake
-        self.t_sleep = t_sleep
-        self.v_min   = v_min
-        self.v_max   = v_max
+
+    def __init__(self, lat, lon, t_wake, t_sleep, v_min, v_max, v_moon):
+        self.t_wake  = t_wake     # time you wake up
+        self.t_sleep = t_sleep    # time you go to sleep
+        self.v_min   = v_min      # minumum CCT
+        self.v_max   = v_max      # maximum CCT during day
+        self.v_moon  = v_moon     # maximum CCT during night
         self.sun     = Sun()
         self.obs     = Observer()
-        self.obs.lon = lon
-        self.obs.lat = lat
-        self.obs.elevation = 6.0 # civil twilight
+        self.obs.lon = lon        # longitude in "52:01.224" format
+        self.obs.lat = lat        # latitude in "5:41.065" format
+        self.obs.elevation = 6.0  # twilight angle (civil = 6)
    
+
     def phase(self, t0, t1, t2):
         return pi * (t1-t0) / (t2-t0) 
 
+
     def value_at(self, t_given=None):
+        """
+            ----------------- timeline (| is midnight) -----------------------
+              winter:        | wakeup  sunrise  noon  sunset  sleep |
+              summer:        | sunrise  wakeup  noon  sleep  sunset |
+                                     \ /                    \ /
+             general:  end-0 |      start       noon        end     |  start-1
+        """
         t_now = t_given.astimezone(utc) if t_given else datetime.now().astimezone(utc)
         today = t_now.replace(hour=0, minute=0, second=0).astimezone(utc)
         t_rise  = to_timezone(self.obs.next_rising (self.sun, start=today), utc)
@@ -56,11 +67,11 @@ class cct_cycle:
         t_sleep = datetime.combine(today, self.t_sleep).astimezone(utc)
 
         # we need these to have different starting points during winter or summer
-        t_start      = min(t_wake, t_rise)     # earliest of given wake and sunrise
-        t_end        = max(t_set, t_sleep)     # latest of sunset and given sleep time
+        t_start   = min(t_wake, t_rise)     # earliest of given wake and sunrise
+        t_end     = max(t_set, t_sleep)     # latest of sunset and given sleep time
         # we need these to get the begin and end of the day right
-        t_start_next = min(t_wake + day, t_rise + day)    # idem, for next day    
-        t_end_prev   = max(t_set - day, t_sleep - day)    # idem, for previous day
+        t_start_1 = min(t_wake + day, t_rise + day)    # idem, for next day    
+        t_end_0   = max(t_set - day, t_sleep - day)    # idem, for previous day
 
         assert t_wake < t_sleep
         assert t_wake < t_noon
@@ -74,6 +85,8 @@ class cct_cycle:
             br = int(sin(self.phase(t_wake, t_now, t_sleep)) * 98 + 2)
         else:
             br = 2
+
+        v_max = self.v_max
 
         # winter, when sunrise is later than start time
         if t_wake <= t_now <= t_rise:
@@ -90,16 +103,18 @@ class cct_cycle:
             f = 1/2 * pi + 1/2 * self.phase(t_noon, t_now, t_set)
 
         # late night, after both end and set
-        elif t_end <= t_now <= t_start_next:
-            f = self.phase(t_end, t_now, t_start_next)
+        elif t_end <= t_now <= t_start_1:
+            f = self.phase(t_end, t_now, t_start_1)
+            v_max = self.v_moon
         # early night, before both start and rise
-        elif t_end_prev <= t_now <= t_start:
-            f = self.phase(t_end_prev, t_now, t_start)
+        elif t_end_0 <= t_now <= t_start:
+            f = self.phase(t_end_0, t_now, t_start)
+            v_max = self.v_moon
 
         else:
             return
 
-        return int(sin(f) * (self.v_max - self.v_min) + self.v_min )
+        return int(sin(f) * (v_max - self.v_min) + self.v_min)
     
 
 
@@ -111,22 +126,23 @@ def create_cycle():
         lon =  "5:41.065",
         t_wake = time(hour=8, tzinfo=ams),
         t_sleep = time(hour=22, tzinfo=ams),
-        v_min = 2500,
-        v_max = 6000)
+        v_min  =  2500,
+        v_max  =  6000,
+        v_moon = 10000)
 
-    test.eq([5331, 5828, 6000, 5828, 5331, 4557, 3581,  # night
+    test.eq([8567, 9632, 10000, 9632, 8567, 6908, 4817, # night
              2500, 2848, 4177, 5240, 5872, 5971,        # morning
              5522, 4598, 3342, 2500,                    # afternoon
              2500, 2500, 2500, 2500, 2500,              # evening
-             3581, 4557,                                # late night
+             4817, 6908,                                # late night
         ],
         [c.value_at(datetime(2023, 1, 1, hour=h, tzinfo=utc)) for h in range(0, 24)],
         diff=test.diff) 
 
-    test.eq([5145, 5863, 5959, 5418, 4336, 2915, 2974,        # night
+    test.eq([8168, 9706, 9914, 8753, 6435, 3389, 2974,        # night
              3612, 4212, 4751, 5211, 5576, 5833, 5973, 5992,  # 7 - 14h
              5888, 5665, 5331, 4898, 4381, 3798, 3169, 2517,  # 15 - 22h
-             3932,                                            # 23h
+             5570,                                            # 23h
         ],
         [c.value_at(datetime(2023, 6, 21, hour=h)) for h in range(0, 24)],
         diff=test.diff) 
@@ -137,7 +153,7 @@ def create_cycle():
 
     # in summer, higest value should be at sun transit and middle bwteen set and rise
     test.eq(5999, c.value_at(datetime(2023, 6, 21, hour=13, minute=39)))
-    test.eq(5999, c.value_at(datetime(2023, 6, 22, hour= 1, minute=39)))
+    test.eq(9999, c.value_at(datetime(2023, 6, 22, hour= 1, minute=39)))
 
     # in winter, lowest value should be between wake and rise
     test.eq(2500, c.value_at(datetime(2023, 12, 21, hour= 8)))
@@ -147,7 +163,7 @@ def create_cycle():
     test.eq(2500, c.value_at(datetime(2023, 12, 21, hour=22)))
 
     # in winter, higest value should be at sun transit and middle bwteen sleep and wake
-    test.eq(5999, c.value_at(datetime(2023, 12, 21, hour=12, minute=35, second=41)))
-    test.eq(6000, c.value_at(datetime(2023, 12, 22, hour= 3)))
+    test.eq( 5999, c.value_at(datetime(2023, 12, 21, hour=12, minute=35, second=41)))
+    test.eq(10000, c.value_at(datetime(2023, 12, 22, hour= 3)))
 
     # TODO brightness

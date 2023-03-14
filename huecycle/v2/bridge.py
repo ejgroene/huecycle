@@ -1,4 +1,5 @@
-import requests
+import asyncio
+import aiohttp
 import time
 from functools import partialmethod
 from prototype3 import prototype
@@ -16,44 +17,48 @@ class bridge(prototype):
     headers = property(lambda self: {'hue-application-key': self.username})
 
 
-    def request(self, *a, **kw): # intended for mocking
-        return requests.request(*a, **kw)
+    async def request(self, *a, **kw): # intended for mocking
+        async with aiohttp.ClientSession() as session:
+            async with session.request(*a, **kw) as response:
+                assert response.status == 200, f"{a} {kw}"
+                return await response.json()
     
 
-    def http_get(self, method='get', api='/clip/v2', path='', **kw):
+    async def http_get(self, method='get', api='/clip/v2', path='', **kw):
         path = f"{self.baseurl}{api}{path}"
-        response = self.request(method, path, verify=False, headers=self.headers, **kw)
-        assert response.status_code == 200, f"{method}:{path}, {response.text}"
-        return response
+        return await self.request(method, path, verify_ssl=False, headers=self.headers, **kw)
 
 
     http_put = partialmethod(http_get, method='put')
 
 
-    def read_objects(self):
-        response = self.http_get(path='/resource')
-        for data in response.json()['data']:
+    async def read_objects(self):
+        response = await self.http_get(path='/resource')
+        for data in response['data']:
             resource = self(data['type'], **data) # clone/delegate to me
             self.index[resource.id] = resource
         return self.index
 
 
     def put(self, data):
-        return self.http_put(path=f'/resource/{self.type}/{self.id}', json=data)
+        """ keep put synchronous as to keep using it simple; hence the task
+            no one is interested in the response anyway, we could log errors though TODO
+        """
+        asyncio.create_task(self.http_put(path=f'/resource/{self.type}/{self.id}', json=data))
 
 
-    def eventstream(self):
+    async def eventstream(self):
         while True:
             try:
-                response = self.http_get(api="/eventstream/clip/v2", timeout=100)
-            except requests.exceptions.ReadTimeout as e:
+                response = await self.http_get(api="/eventstream/clip/v2", timeout=100)
+            except asyncio.exceptions.TimeoutError as e:
                 print(e)
                 continue
-            except requests.exceptions.ConnectionError as e:
+            except aiohttp.client_exceptions.ClientConnectorError as e:
                 print(e)
                 time.sleep(1)
                 continue
-            for event in response.json():
+            for event in response:
                 for data in event['data']:
                     yield self.filter_event(data)
 
@@ -98,49 +103,42 @@ def init():
 
 
 @test
-def read_objects():
-    def request(self, method='', path='', headers=None, **kw):
+async def read_objects():
+    async def request(self, method='', path='', headers=None, **kw):
         assert path == 'base9/clip/v2/resource', path
         assert method == 'get'
         assert headers == {'hue-application-key': 'pietje'}, headers
-        assert kw == {'verify': False}, kw
-        return prototype('response', status_code=200,
-            json=lambda self: {'data': [
-                {'id': 'one', 'type': 'One'},
-            ]})
+        assert kw == {'verify_ssl': False}, kw
+        return {'data': [{'id': 'one', 'type': 'One'}]}
     b = bridge(baseurl='base9', username='pietje', request=request)
-    objs = b.read_objects()
+    objs = await b.read_objects()
     test.eq({'one': {'id': 'one', 'type': 'One'}}, objs)
     test.eq('One', objs['one'].type)
 
 
 @test
-def write_object():
-    def request(self, method='', path='', headers=None, **kw):
+async def write_object():
+    async def request(self, method='', path='', headers=None, **kw):
         if method == 'put':
             assert path == 'b7/clip/v2/resource/OneType/oneId', path
             assert headers == {'hue-application-key': 'jo'}, headers
-            assert kw == {'verify': False, 'json': {'add': 'this'}}, kw
-            return prototype('response', status_code=200)
+            assert kw == {'verify_ssl': False, 'json': {'add': 'this'}}, kw
+            return {} 
         else:
-            return prototype('response', status_code=200,
-                json=lambda self: {'data': [
-                    {'id': 'oneId', 'type': 'OneType'},
-                ]})
+            return {'data': [{'id': 'oneId', 'type': 'OneType'}]}
     b = bridge(baseurl='b7', username='jo', request=request)
-    objs = b.read_objects()
+    objs = await b.read_objects()
     b.index['oneId'].put({'add': 'this'})
 
 
 @test
-def event_stream():
-    def request(self, method='', path='', headers=None, **kw):
+async def event_stream():
+    async def request(self, method='', path='', headers=None, **kw):
         assert path == 'k9/eventstream/clip/v2', path
         assert method == 'get'
         assert headers == {'hue-application-key': 'K1'}, headers
-        assert kw == {'verify': False, 'timeout': 100}, kw
-        return prototype('response', status_code=200,
-            json=lambda self: [{
+        assert kw == {'verify_ssl': False, 'timeout': 100}, kw
+        return [{
                 'data': [
                     {'id': 'event1', 'type': 'happening'},
                     {'id': 'event2', 'type': 'party'},
@@ -148,61 +146,61 @@ def event_stream():
                 'data': [
                     {'id': 'event3', 'type': 'closing'},
                 ]},
-            ])
+            ]
     b = bridge(baseurl='k9', username='K1', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
-    test.eq({'id': 'event1', 'type': 'happening'}, next(events))
-    test.eq({'id': 'event2', 'type': 'party'}, next(events))
-    test.eq({'id': 'event3', 'type': 'closing'}, next(events))
+    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
+    test.eq({'id': 'event2', 'type': 'party'}, await anext(events))
+    test.eq({'id': 'event3', 'type': 'closing'}, await anext(events))
 
  
 @test
-def handle_timeout():
+async def handle_timeout():
     gooi = False
     calls = 0
-    def request(self, *_, **__):
+    async def request(self, *_, **__):
         nonlocal gooi, calls
         calls += 1
         if gooi:
             gooi = False
-            raise requests.exceptions.ReadTimeout
+            raise asyncio.exceptions.TimeoutError
         gooi = True
-        return prototype('response', status_code=200,
-            json=lambda self: [{
+        return [{
                 'data': [
                     {'id': 'event1', 'type': 'happening'},
                 ]},
-            ])
+            ]
     b = bridge(baseurl='err', username='my', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
-    test.eq({'id': 'event1', 'type': 'happening'}, next(events))
-    test.eq({'id': 'event1', 'type': 'happening'}, next(events))
+    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
+    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
     test.eq(3, calls)
 
 
-@test
-def wait_a_sec_on_connectionerror():
+@test(slow_callback_duration=2)
+async def wait_a_sec_on_connectionerror():
     gooi = False
     call_times = []
-    def request(self, *_, **__):
+    async def request(self, *_, **__):
         nonlocal gooi
         call_times.append(time.monotonic())
         if gooi:
             gooi = False
-            raise requests.exceptions.ConnectionError
+            connection_key = prototype(ssl=None, host=None, port=None)
+            raise aiohttp.client_exceptions.ClientConnectorError(connection_key, OSError(1))
         gooi = True
-        return prototype('response', status_code=200,
-            json=lambda self: [{
+        return [{
                 'data': [
                     {'id': 'event1', 'type': 'happening'},
                 ]},
-            ])
+            ]
     b = bridge(baseurl='err', username='my', request=request, filter_event=lambda s,e: e)
     events = b.eventstream()
-    test.eq({'id': 'event1', 'type': 'happening'}, next(events))
-    test.eq({'id': 'event1', 'type': 'happening'}, next(events))
+    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
+    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
     test.eq(3, len(call_times))
     test.gt(call_times[2] - call_times[1], 0.9)
+
 
 @test
 def filter_event_data():
@@ -211,6 +209,7 @@ def filter_event_data():
     owner, update = b.filter_event(prototype(type='A', id='1', on=False))
     test.eq({'id': '1', 'resource': 'A'}, owner)
     test.eq(False, update.on)
+
 
 @test
 def byname():

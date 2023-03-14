@@ -11,7 +11,7 @@ MIREK = 1000000
 
 def ct_to_xy(ct):
     """ https://en.wikipedia.org/wiki/Planckian_locus#Approximation """
-    assert 1667 <= ct <= 25000, 'out of range'
+    assert 1667 <= ct <= 25000, f"out of range: {ct}"
     T = ct
     if T < 4000:
         x = -0.2661239 * 10**9/T**3 -0.2343589 * 10**6/T**2 +0.8776956 * 10**3/T +0.179910

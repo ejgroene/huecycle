@@ -1,10 +1,16 @@
+import time
+import datetime
+import zoneinfo
+import bridge
+import utils
+import cct_cycle
+import extended_cct
+from controllers import cycle_cct, light_off, light_on
+
 import logging
 logging.captureWarnings(True) # get rid of unverified https certificate
 logging.basicConfig(level=logging.ERROR)
 
-import time
-import bridge
-import utils
 import autotest
 test = autotest.get_tester(__name__)
 
@@ -13,68 +19,70 @@ b = bridge.bridge(
     baseurl='https://192.168.178.78',
     username="IW4mOZWMTo1jrOqZEd66fbGoc7HWsiblPd8r2Qwt" # hue-application-key,
 )
-b.read_objects()
-byname = b.byname()
-utils.print_overview(b)
+
+async def main():
+    await b.read_objects()
+    byname = b.byname()
+    utils.print_overview(b)
+
+    ams   = zoneinfo.ZoneInfo('Europe/Amsterdam')
+    cycle = cct_cycle.cct_cycle(
+            lat      = "52:01.224",
+            lon      =  "5:41.065",
+            t_wake   = datetime.time(hour= 7, tzinfo=ams),
+            t_sleep  = datetime.time(hour=23, tzinfo=ams),
+            cct_min  =  2000,
+            cct_sun  =  5000,
+            cct_moon = 10000,
+            br_dim   =    10,
+            br_max   =   100)
 
 
-DEFAULT_CT = 1000000//4000
-DIM_CT = 1000000//3000
+    office = byname['grouped_light:Office']
+    motion = byname['motion:Hue motion sensor 1']
+    lightl = byname['light_level:Hue motion sensor 1']
+    button = byname['button:Buro Dumb Button']
+
+    # TODO
+    def handle(button, update):
+        pass
+    button.handler = handle
 
 
-office = byname['grouped_light:Office']
-motion = byname['motion:Hue motion sensor 1']
-lightl = byname['light_level:Hue motion sensor 1']
-button = byname['button:Buro Dumb Button']
+    t_now = 0
+    press = None        
+    async for service, update in b.eventstream():          # TODO make non-blocking
+        cct, brightness = cycle.cct_brightness()
+        print(f"{service.qname!r}: {dict(update)}")
+        t_last = t_now
+        t_now = time.monotonic()
+        if service == button:
 
+            # TODO how to make double press detection easy
+            last_press = press
+            press = update['last_event']
+            if press == 'initial_press':
+                if last_press == 'short_release' and t_now - t_last < 1:
 
-def office_on(brightness=100, ct=DEFAULT_CT):
-    office.put({
-        'on': {'on': True},
-        'color_temperature': {'mirek': ct},
-        'dimming': {'brightness': brightness}
-    })
-
-def office_off():
-    office.put({'on': {'on': False}})
-
-
-t_now = 0
-t_last_on_motion = None
-press = None
-for service, update in b.eventstream():
-    print(f"{service.qname!r}: {dict(update)}")
-    t_last = t_now
-    t_now = time.monotonic()
-    if service == button:
-        last_press = press
-        press = update['last_event']
-        if press == 'initial_press':
-            if last_press == 'short_release' and t_now - t_last < 1:
-                office_on()
-            else:
-                office_on(brightness=50, ct=DIM_CT)
-        elif press == 'long_press':
-            office_off()
-    elif service == motion:
-        if update.get('motion'): # could also be 'sensitivity'
-            t_last_on_motion = t_now
-            if not office.on.on:
-                if lightl.light.light_level < 15000:
-                    office_on(brightness=50, ct=DIM_CT)
+                    light_on(office, brightness=100, ct=3000)
                 else:
-                    office_on()
-    else:
-        """ update internal state to reflect changes """
-        old = service.keys()
-        service.update(update)
-        diff = old ^ service.keys()
-        assert diff <= {'temperature_valid'}, diff
+                    cycle_cct(office, cycle)
+            elif press == 'long_press':
+                light_off(office)
+        elif service == motion:
+            if update.get('motion'): # could also be 'sensitivity'
+                if not office.on.on:
+                    cycle_cct(office, cycle)
+                    light_off(after=5*60) # cancels cycle_cct immediately...
+        else:
+            """ update internal state to reflect changes """
+            old = service.keys()
+            service.update(update)
+            diff = old ^ service.keys()
+            assert diff <= {'temperature_valid'}, diff
 
-    # TODO this should be triggered separately
-    if t_last_on_motion and t_now - t_last_on_motion > 5 * 60:
-        t_last_on_motion = None
-        if office.on.on:
-            office_off()
-        
+        await asyncio.sleep(0)
+            
 
+import asyncio
+asyncio.run(main())

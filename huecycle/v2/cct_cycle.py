@@ -75,6 +75,9 @@ class cct_cycle:
         t_start_1 = min(t_wake + day, t_rise + day)
         t_end_0   = max(t_set - day, t_sleep - day)
 
+        if t_sleep < t_wake: # night owl
+            t_sleep += day
+
         assert t_end_0  <  t_wake  <  t_noon  <  t_sleep <  t_start_1
         assert t_end_0  <  t_rise  <  t_noon  <  t_set   <  t_start_1
         assert t_end_0  <  t_start <  t_noon  <  t_end   <  t_start_1
@@ -198,4 +201,22 @@ def real_cycle():
     test.contains(range(10, 101), br)
 
 
+@test
+def sleep_time_after_midnight():
+    c = cct_cycle(
+        lat      = "52:01.224",
+        lon      =  "5:41.065",
+        t_wake   = time(hour= 6),
+        t_sleep  = time(hour= 1), # night owl
+        cct_min  =  2000,
+        cct_sun  =  5000,
+        cct_moon = 20000,
+        br_dim   =    10,
+        br_max   =   100)
 
+    cct, br = c.cct_brightness(datetime(2023, 3, 15, hour=23, minute=59))
+    test.eq(2000, cct)
+    test.eq(  22, br)
+    cct, br = c.cct_brightness(datetime(2023, 3, 16, hour= 0, minute=59))
+    test.eq(2000, cct)
+    test.eq(  10, br)

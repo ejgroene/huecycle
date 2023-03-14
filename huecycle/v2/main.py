@@ -43,46 +43,42 @@ async def main():
     lightl = byname['light_level:Hue motion sensor 1']
     button = byname['button:Buro Dumb Button']
 
-    # TODO
-    def handle(button, update):
-        pass
-    button.handler = handle
+    def handle_button(button, update):
+        # TODO: double press
+        press = update['last_event']
+        if press == 'initial_press':
+            cycle_cct(office, cycle)
+        elif press == 'long_press':
+            light_off(office)
 
-
-    t_now = 0
-    press = None        
-    async for service, update in b.eventstream():          # TODO make non-blocking
-        cct, brightness = cycle.cct_brightness()
-        print(f"{service.qname!r}: {dict(update)}")
-        t_last = t_now
-        t_now = time.monotonic()
-        if service == button:
-
-            # TODO how to make double press detection easy
-            last_press = press
-            press = update['last_event']
-            if press == 'initial_press':
-                if last_press == 'short_release' and t_now - t_last < 1:
-
-                    light_on(office, brightness=100, ct=3000)
-                else:
-                    cycle_cct(office, cycle)
-            elif press == 'long_press':
-                light_off(office)
-        elif service == motion:
-            if update.get('motion'): # could also be 'sensitivity'
-                if not office.on.on:
-                    cycle_cct(office, cycle)
-                    light_off(after=5*60) # cancels cycle_cct immediately...
+    def handle_motion(motion, update):
+        if update.get('motion'): # could also be 'sensitivity'
+            cycle_cct(office, cycle)
         else:
-            """ update internal state to reflect changes """
-            old = service.keys()
-            service.update(update)
-            diff = old ^ service.keys()
-            assert diff <= {'temperature_valid'}, diff
+            """ TODO cancels cycle_cct, which is problematic:
+                cct and brightness control stops; if a motion
+                event comes which reinstalls cycle_cct, the
+                CCT and brightness will suddenly shift a bit
+                to update from the time it hasn't updated.
+            """
+            light_off(office, after=5*60)
 
+    button.handle_event = handle_button
+    motion.handle_event = handle_motion
+
+
+    async for service, update in b.eventstream():
+        print(f"{service.qname!r}: {dict(update)}")
+        if hasattr(service, 'handle_event'):
+            service.handle_event(update)
+            continue
+        """ update internal state to reflect changes """
+        old = service.keys()
+        service.update(update)
+        diff = old ^ service.keys()
+        assert diff <= {'temperature_valid'}, diff
         await asyncio.sleep(0)
-            
+
 
 import asyncio
-asyncio.run(main())
+asyncio.run(main(), debug=True)

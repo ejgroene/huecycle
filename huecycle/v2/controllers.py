@@ -1,5 +1,6 @@
 import inspect
 import asyncio
+from datetime import time, datetime, timedelta
 from prototype3 import prototype
 
 import autotest
@@ -26,7 +27,7 @@ def controller(control):
                 service.controller.cancel()
             except AttributeError:
                 pass
-            service.controller = asyncio.create_task(control(service, *a, **kw))
+            service.controller = asyncio.create_task(control(service, *a, **kw), name=control.__name__)
             return service.controller
     else:
         def control_func(service, *a, **kw):
@@ -111,6 +112,7 @@ async def advanced_controller_handling(mockservice):
 
     task1 = c_control(mockservice)
     test.eq(task1, mockservice.controller)
+    test.eq('c_control', task1.get_name())
     test.eq('c_control', task1.get_coro().cr_code.co_name)
 
     c_control(mockservice)
@@ -165,16 +167,13 @@ async def light_off_test(mockservice):
 
 
 @controller
-async def cycle_cct(light, ct_cycle, t=10):
-    try:
-        while True:
-            print(">>> setting light")
-            light_on(light, *ct_cycle.cct_brightness())
-            await asyncio.sleep(t)
-    finally:
-        print(">>> EXIT")
-           
- 
+async def cycle_cct(light, ct_cycle, t=2*60):
+    while True:
+        light_on(light, *ct_cycle.cct_brightness())
+        await asyncio.sleep(t)
+
+
+
 @test.fixture
 def mockcycle():
     class cycle(prototype):
@@ -203,4 +202,46 @@ async def cct_controller(mockservice, mockcycle):
 @test
 async def cct_cycle_with_group(mockservice:'grouped_light', mockcycle):
     cycle_cct(mockservice, mockcycle, t=0.01)
+
+
    
+def timer(t, control, *args, **kwargs):
+    dt = (t - datetime.now()).total_seconds()
+    assert dt > 0, f"Time lies in the past: {t}"
+    assert callable(control), f"control must be callable: {control!r}"
+    assert inspect.signature(control).bind(*args, **kwargs)
+    # call_at/call_later?
+    async def timer_task():
+        await asyncio.sleep(dt)
+        return control(*args, **kwargs)
+    return asyncio.create_task(timer_task(), name=control.__name__)
+
+
+@test
+async def timer_test():
+    delta = timedelta(milliseconds=100)
+    def do_it(x, a=10):
+        return x * a
+    t = datetime.now() + delta
+    x = timer(t, do_it, 42, a=2)
+    test.eq('do_it', x.get_name())
+    test.eq(84, await x)
+    dt = (datetime.now() - t).total_seconds()
+    test.gt(dt, 0.00)
+
+
+@test
+async def timer_checks_args():
+    delta = timedelta(milliseconds=100)
+    t = datetime.now() - delta
+    with test.raises(AssertionError, f"Time lies in the past: {t}"):
+        timer(t, None) 
+
+    t = datetime.now() + delta
+    with test.raises(AssertionError, f"control must be callable: 'aap'"):
+        timer(t, "aap") 
+
+    def f(a):
+        pass
+    with test.raises(TypeError, f"missing a required argument: 'a'"):
+        timer(t, f) 

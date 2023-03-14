@@ -1,6 +1,8 @@
 import asyncio
 import aiohttp
 import time
+import inspect
+
 from functools import partialmethod
 from prototype3 import prototype
 import utils
@@ -79,6 +81,11 @@ class bridge(prototype):
                     raise Exception("Duplicate name")
                 byname[qname] = r
         return byname
+
+
+    def handler(self, h):
+        assert inspect.isfunction(h)
+        self.event_handler = h
 
 
 @test

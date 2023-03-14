@@ -43,16 +43,19 @@ async def main():
     lightl = byname['light_level:Hue motion sensor 1']
     button = byname['button:Buro Dumb Button']
 
-    def handle_button(button, update):
-        # TODO: double press
-        press = update['last_event']
+
+    @button.handler
+    def handle(button, event):
+        press = event['last_event']
         if press == 'initial_press':
             cycle_cct(office, cycle)
         elif press == 'long_press':
             light_off(office)
 
-    def handle_motion(motion, update):
-        if update.get('motion'): # could also be 'sensitivity'
+
+    @motion.handler
+    def handle(motion, event):
+        if event.get('motion'):
             cycle_cct(office, cycle)
         else:
             """ TODO cancels cycle_cct, which is problematic:
@@ -63,14 +66,11 @@ async def main():
             """
             light_off(office, after=5*60)
 
-    button.handle_event = handle_button
-    motion.handle_event = handle_motion
-
 
     async for service, update in b.eventstream():
         print(f"{service.qname!r}: {dict(update)}")
-        if hasattr(service, 'handle_event'):
-            service.handle_event(update)
+        if hasattr(service, 'event_handler'):
+            service.event_handler(update)
             continue
         """ update internal state to reflect changes """
         old = service.keys()

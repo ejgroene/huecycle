@@ -3,8 +3,8 @@ import datetime
 import zoneinfo
 import bridge
 import utils
-import cct_cycle
 import extended_cct
+from cct_cycle import cct_cycle, location
 from controllers import cycle_cct, light_off, light_on
 
 import logging
@@ -26,16 +26,10 @@ async def main():
     utils.print_overview(b)
 
     ams   = zoneinfo.ZoneInfo('Europe/Amsterdam')
-    cycle = cct_cycle.cct_cycle(
-            lat      = "52:01.224",
-            lon      =  "5:41.065",
-            t_wake   = datetime.time(hour= 7, tzinfo=ams),
-            t_sleep  = datetime.time(hour=23, tzinfo=ams),
-            cct_min  =  2000,
-            cct_sun  =  5000,
-            cct_moon = 10000,
-            br_dim   =    10,
-            br_max   =   100)
+    cycle = cct_cycle(
+                loc      = location("52:01.224", "5:41.065"),
+                t_wake   = datetime.time(hour= 7, tzinfo=ams),
+                t_sleep  = datetime.time(hour=23, tzinfo=ams))
 
 
     office = byname['grouped_light:Office']
@@ -44,10 +38,25 @@ async def main():
     button = byname['button:Buro Dumb Button']
 
 
+    # IDEA: let event be an awaitable, so you can write loops that maintain state:
+    #@button.loop_handler
+    async def loop(button, event):
+        last = None
+        while True:
+            e = await event
+            if e.aap and last.noot:
+                do_A()
+            else:
+                do_B()
+            last = e
+
+
     @button.handler
     def handle(button, event):
         press = event['last_event']
         if press == 'initial_press':
+            #if office.on.on:
+            #    increase_brightness(cycle)
             cycle_cct(office, cycle)
         elif press == 'long_press':
             light_off(office)
@@ -67,6 +76,17 @@ async def main():
             light_off(office, after=5*60)
 
 
+    # IDEA
+    def increase_brightness(cycle):
+        print("increasing brightness")
+        cycle.br_dim *= 1.5
+        cycle.br_max *= 1.5
+
+    def decrease_brightness(cycle):
+        cycle.br_dim /= 1.5
+        cycle.br_max /= 1.5
+
+        
     async for service, update in b.eventstream():
         print(f"{service.qname!r}: {dict(update)}")
         if hasattr(service, 'event_handler'):

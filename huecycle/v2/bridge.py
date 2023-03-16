@@ -22,7 +22,7 @@ class bridge(prototype):
     async def request(self, *a, **kw): # intended for mocking
         async with aiohttp.ClientSession() as session:
             async with session.request(*a, **kw) as response:
-                assert response.status == 200, f"{a} {kw}"
+                assert response.status == 200, (f"{a} {kw}", await response.text())
                 return await response.json()
     
 

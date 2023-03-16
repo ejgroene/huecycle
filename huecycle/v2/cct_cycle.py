@@ -6,6 +6,7 @@ from datetime import time, datetime, timedelta
 from zoneinfo import ZoneInfo
 from ephem import Observer, Sun, localtime, to_timezone
 from math import sin, pi
+from prototype3 import prototype
 
 
 MIREK = 10**6
@@ -18,31 +19,8 @@ def ephem_to_datetime(e):
     return to_timezone(e, utc).replace(second=0, microsecond=0)
 
 
-class cct_cycle:
 
-    def __init__(self, lat, lon, t_wake, t_sleep, cct_min, cct_sun, cct_moon, br_dim, br_max):
-        assert isinstance(lat, str), lat
-        assert isinstance(lon, str), lon
-        assert t_wake.second == t_sleep.second == t_wake.microsecond == t_wake.microsecond == 0
-        assert 1000 <= cct_min  <= 20000, cct_min
-        assert 3000 <= cct_sun  <= 10000, cct_sun
-        assert 3000 <= cct_moon <= 20000, cct_moon
-        assert cct_min < cct_sun < cct_moon
-        assert      1 <= br_dim <  100, br_dim
-        assert br_dim  < br_max <= 100, br_max
-        self.t_wake   = t_wake     # time you wake up
-        self.t_sleep  = t_sleep    # time you go to sleep
-        self.cct_min  = cct_min    # minimum CCT at dusk and dawn
-        self.cct_sun  = cct_sun    # maximum CCT during day
-        self.cct_moon = cct_moon   # maximum CCT during night
-        self.br_dim   = br_dim     # brightness night light
-        self.br_max   = br_max     # full brightness
-        self.sun      = Sun()
-        self.obs      = Observer()
-        self.obs.lon  = lon        # longitude in "52:01.224" format
-        self.obs.lat  = lat        # latitude in "5:41.065" format
-        self.obs.elevation = 6.0   # twilight angle (civil = 6)
-   
+class Cct_cycle(prototype):
 
     def phase(self, t0, t1, t2):
         assert t0 <= t1 <= t2
@@ -65,9 +43,9 @@ class cct_cycle:
         """
         t_now     = t_given.astimezone(utc) if t_given else datetime.now().astimezone(utc)
         today     = t_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc)
-        t_rise    = ephem_to_datetime(self.obs.next_rising (self.sun, start=today))
-        t_noon    = ephem_to_datetime(self.obs.next_transit(self.sun, start=today))
-        t_set     = ephem_to_datetime(self.obs.next_setting(self.sun, start=today))
+        t_rise    = ephem_to_datetime(self.loc.next_rising (self.sun, start=today))
+        t_noon    = ephem_to_datetime(self.loc.next_transit(self.sun, start=today))
+        t_set     = ephem_to_datetime(self.loc.next_setting(self.sun, start=today))
         t_wake    = datetime.combine(today, self.t_wake ).astimezone(utc)
         t_sleep   = datetime.combine(today, self.t_sleep).astimezone(utc)
         t_start   = min(t_wake, t_rise)
@@ -130,21 +108,48 @@ class cct_cycle:
         return round(MIREK/mirek), round(brightness)
     
 
+def location(lat, lon, elevation=6.0):
+    assert isinstance(lat, str), lat
+    assert isinstance(lon, str), lon
+    assert isinstance(elevation, float), elevation
+    obs      = Observer()
+    obs.lon  = lon        # longitude in "52:01.224" format
+    obs.lat  = lat        # latitude in "5:41.065" format
+    obs.elevation = 6.0   # twilight angle (civil = 6)
+    return obs
+
+
+class cct_cycle(Cct_cycle):
+    loc      = None          # provide geographic location
+    sun      = Sun()         # used for tracking sun rise and set
+    t_wake   = time(hour= 7) # time you wake up
+    t_sleep  = time(hour=23) # time you go to sleep
+    cct_min  =  2000         # minimum CCT at dusk and dawn
+    cct_sun  =  5000         # maximum CCT during day
+    cct_moon = 10000         # maximum CCT during night
+    br_dim   =    10         # brightness night light
+    br_max   =   100         # full brightness
+    assert t_wake.second == t_sleep.second == t_wake.microsecond == t_wake.microsecond == 0
+    assert 1000 <= cct_min  <= 20000, cct_min
+    assert 3000 <= cct_sun  <= 10000, cct_sun
+    assert 3000 <= cct_moon <= 20000, cct_moon
+    assert cct_min < cct_sun < cct_moon
+    assert      1 <= br_dim <  100, br_dim
+    assert br_dim  < br_max <= 100, br_max
+
 
 
 @test
 def create_cycle():
     ams = ZoneInfo('Europe/Amsterdam')
     c = cct_cycle(
-        lat      = "52:01.224",
-        lon      =  "5:41.065",
-        t_wake   = time(hour= 8, tzinfo=ams),
-        t_sleep  = time(hour=22, tzinfo=ams),
-        cct_min  =  2500,
-        cct_sun  =  6000,
-        cct_moon = 10000,
-        br_dim   =     2,
-        br_max   =    99)
+            loc      = location("52:01.224","5:41.065"),
+            t_wake   = time(hour= 8, tzinfo=ams),
+            t_sleep  = time(hour=22, tzinfo=ams),
+            cct_min  =  2500,
+            cct_sun  =  6000,
+            br_dim   =     2,
+            br_max   =    99)
 
     test.eq([(6357,  2), (8720,  2), (10000, 2), (8720,  2), (6357,  2), (4471,  2), (3254, 2), # night
              (2500,  2), (2655, 34), (3471, 62), (4605, 84), (5710, 97), (5930, 99),            # morning
@@ -186,15 +191,10 @@ def create_cycle():
 def real_cycle():
     ams = ZoneInfo('Europe/Amsterdam')
     c = cct_cycle(
-        lat      = "52:01.224",
-        lon      =  "5:41.065",
-        t_wake   = time(hour= 6, tzinfo=ams),
-        t_sleep  = time(hour=23, tzinfo=ams),
-        cct_min  =  2000,
-        cct_sun  =  5000,
-        cct_moon = 20000,
-        br_dim   =    10,
-        br_max   =   100)
+            loc      = location("52:01.224","5:41.065"),
+            t_wake   = time(hour= 6, tzinfo=ams),
+            t_sleep  = time(hour=23, tzinfo=ams),
+            cct_moon = 20000)
 
     cct, br = c.cct_brightness()
     test.contains(range(1000, 5001), cct) # it just depends on when you run this test
@@ -204,15 +204,9 @@ def real_cycle():
 @test
 def sleep_time_after_midnight():
     c = cct_cycle(
-        lat      = "52:01.224",
-        lon      =  "5:41.065",
-        t_wake   = time(hour= 6),
-        t_sleep  = time(hour= 1), # night owl
-        cct_min  =  2000,
-        cct_sun  =  5000,
-        cct_moon = 20000,
-        br_dim   =    10,
-        br_max   =   100)
+            loc      = location("52:01.224","5:41.065"),
+            t_wake   = time(hour= 6),
+            t_sleep  = time(hour= 1)) # night owl
 
     cct, br = c.cct_brightness(datetime(2023, 3, 15, hour=23, minute=59))
     test.eq(2000, cct)

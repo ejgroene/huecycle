@@ -3,7 +3,9 @@ test = get_tester(__name__)
 
 MIREK = 1000000
 """ Extends Hue's CT range by simulating very low or high CT's with the nearest hue and saturation.
-    See http://developers.meethue.com/coreconcepts.html for the color space, gammut and locus."""
+    See http://developers.meethue.com/coreconcepts.html for the color space, gammut and locus.
+    NB: this only works for Hue COLOR lamp!
+"""
 
 # NEW Philips Hue White and Color 1100 Lumens lamp (with Gamut C)
 # API v2 works with Mirek and XY, ct and hue/sat are no longer supported

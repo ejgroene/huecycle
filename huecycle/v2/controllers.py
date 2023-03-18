@@ -2,6 +2,7 @@ import inspect
 import asyncio
 from datetime import time, datetime, timedelta
 from prototype3 import prototype
+from extended_cct import ct_to_xy, MIREK
 
 import autotest
 test = autotest.get_tester(__name__)
@@ -31,9 +32,9 @@ def controller(control):
             return service.controller
     else:
         def control_func(service, *a, **kw):
-            if hasattr(service, 'controller'):
-                if not service.controller.get_coro().cr_running:
-                    service.controller.cancel()
+            if c := service.controller:
+                if not c.get_coro().cr_running:
+                    c.cancel()
                     del service['controller']
             return control(service, *a, **kw)
     return control_func
@@ -69,7 +70,7 @@ def simple_controller_removes_task(mockservice):
     def do_something(light, x=8):
         light.put('ON') 
     do_something(mockservice, 5)
-    test.not_(hasattr(mockservice, 'controller'))
+    test.not_(mockservice.controller)
 
 
 @test
@@ -97,7 +98,7 @@ async def advanced_controller_handling(mockservice):
     async def b_control(service, a, b=42):
         return service, a, b
 
-    test.not_(hasattr(mockservice, 'controller'))
+    test.not_(mockservice.controller)
     task0 = b_control(mockservice, 8, b=9)
     test.eq((mockservice, 8, 9), await task0) 
     test.eq(task0, mockservice.controller)
@@ -122,14 +123,31 @@ async def advanced_controller_handling(mockservice):
 
 
 @controller
-def light_on(light, ct=3000, brightness=100):
-    import extended_cct
-    x, y = extended_cct.ct_to_xy(ct)
-    light.put({
-        'on': {'on': True},
-        'color': {'xy': {'x': x, 'y': y}},
-        'dimming': {'brightness': brightness}
-    })
+def dim(light, brightness=None, delta=None):  # TODO test
+    if light.on.on:
+        if brightness:
+            light.put({'dimming': {'brightness': brightness}})
+        elif delta:
+            action = 'down' if delta < 0 else 'up'
+            delta = abs(delta)
+            light.put({'dimming_delta': {'action': action, 'brightness_delta': delta}})
+
+
+@controller
+def light_on(light, ct=3000, brightness=100, use_extended_cct=True):
+    if use_extended_cct:
+        x, y = ct_to_xy(ct)
+        light.put({
+            'on': {'on': True},
+            'color': {'xy': {'x': x, 'y': y}},
+            'dimming': {'brightness': brightness}
+        })
+    else:
+        light.put({
+            'on': {'on': True},
+            'color_temperature': {'mirek': MIREK//ct},
+            'dimming': {'brightness': brightness}
+        })
 
 
 @test
@@ -147,9 +165,12 @@ def light_on_test(mockservice:'light'):
     
 
 @controller
-async def light_off(light, after=0):
+async def light_off(light, after=0, duration=None):
     await asyncio.sleep(after)
-    light.put({ 'on': {'on': False}})
+    if duration:
+        light.put({ 'on': {'on': False}, 'dynamics': {'duration': duration}})
+    else:
+        light.put({ 'on': {'on': False}})
 
 
 @test    
@@ -158,18 +179,18 @@ async def light_off_test(mockservice):
     await asyncio.sleep(0.001)
     test.eq(1, len(mockservice.v))
     test.eq({'on': {'on': False}}, mockservice.v[0])
-    light_off(mockservice, after=0.01)
+    light_off(mockservice, after=0.01, duration=1000)
     await asyncio.sleep(0.001)
     test.eq(1, len(mockservice.v))
     await asyncio.sleep(0.01)
-    test.eq({'on': {'on': False}}, mockservice.v[1])
+    test.eq({'on': {'on': False}, 'dynamics': {'duration': 1000}}, mockservice.v[1])
 
 
 
 @controller
-async def cycle_cct(light, ct_cycle, t=2*60):
+async def cycle_cct(light, ct_cycle, t=2*60, use_extended_cct=True):
     while True:
-        light_on(light, *ct_cycle.cct_brightness())
+        light_on(light, *ct_cycle.cct_brightness(), use_extended_cct=use_extended_cct)
         await asyncio.sleep(t)
 
 

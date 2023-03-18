@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import time
 import inspect
+import asyncio
 
 from functools import partialmethod
 from prototype3 import prototype
@@ -14,6 +15,7 @@ test = autotest.get_tester(__name__)
 class bridge(prototype):
 
     index = {}
+    index_byname = {}
     apiv2 = property("{baseurl}/clip/v2".format_map)
     apiv1 = property("{baseurl}/api/{username}".format_map)
     headers = property(lambda self: {'hue-application-key': self.username})
@@ -34,12 +36,20 @@ class bridge(prototype):
     http_put = partialmethod(http_get, method='put')
 
 
-    async def read_objects(self):
-        response = await self.http_get(path='/resource')
-        for data in response['data']:
-            resource = self(data['type'], **data) # clone/delegate to me
-            self.index[resource.id] = resource
-        return self.index
+    def read_objects(self):
+        async def task():
+            response = await self.http_get(path='/resource')
+            for data in response['data']:
+                resource = self(data['type'], **data) # clone/delegate to me
+                self.index[resource.id] = resource
+            return self.index
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(task())
+        else:
+            return asyncio.create_task(task())
+            
 
 
     def put(self, data):
@@ -68,19 +78,21 @@ class bridge(prototype):
     def filter_event(self, event):
         update = event.get(event['type']) or \
                  {k:event[k] for k in event if k not in 'type owner id_v1'}
+        # TODO new devices could be absent
         return self.index[event['id']], prototype('update', **update)
 
 
     def byname(self):
-        byname = {}
-        for r in self.index.values():
-            if qname := utils.get_qname(r, self.index):
-                r['qname'] = qname
-                if qname in byname:
-                    print(test.diff2(byname[qname], r))
-                    raise Exception("Duplicate name")
-                byname[qname] = r
-        return byname
+        if not self.index_byname:
+            self.index_byname = byname = {}
+            for r in self.index.values():
+                if qname := utils.get_qname(r, self.index):
+                    r['qname'] = qname
+                    if qname in byname:
+                        print(test.diff2(byname[qname], r))
+                        raise Exception(f"Duplicate name {qname!r}")
+                    byname[qname] = r
+        return self.index_byname
 
 
     def handler(self, h):
@@ -97,16 +109,11 @@ def init():
     test.eq("http://base.org/api/itsme", b.apiv1)
     test.eq({'hue-application-key': 'itsme'}, b.headers)
     test.eq('itsme', b.username)
-    with test.raises(AttributeError):
-        bridge.username
-    with test.raises(AttributeError):
-        bridge.baseurl
-    with test.raises(AttributeError):
-        bridge.apiv1
-    with test.raises(AttributeError):
-        bridge.apiv2
-    with test.raises(AttributeError):
-        bridge.headers
+    test.eq(None, bridge.username)
+    test.eq(None, bridge.baseurl)
+    test.eq("None/api/None", bridge.apiv1)
+    test.eq("None/clip/v2", bridge.apiv2)
+    test.eq({'hue-application-key': None}, bridge.headers)
 
 
 @test
@@ -226,3 +233,6 @@ def byname():
     byname = b.byname()
     test.eq(mies, byname['girl:mies'])
 
+
+bridge.index.clear()
+bridge.index_byname.clear()

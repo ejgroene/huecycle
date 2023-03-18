@@ -39,6 +39,8 @@ def get_qname(data, index={}):
         resource = index.get(group.get('rid'))
         qualifier = get_qname(resource, index)
         return f"{type}:{qualifier}:{name}"
+    if control_id := data.get('metadata', {}).get('control_id'):
+        return f"{type}:{name}:{control_id}"
     return f"{type}:{name}"
     
 
@@ -56,6 +58,8 @@ def get_name_from_metadata():
     test.eq('A:Jo', get_qname({'metadata': {'abcd': 'jan'}, 'type': 'A', 'owner': {'rid': 'id0'}},
                               {'id0': {'metadata': {'name': 'Jo'}}}))
     test.eq('A:jan', get_qname({'owner': {'rid': 'id0'}, 'type': 'A'},
+                              {'id0': {'metadata': {'name': 'jan'}, 'type': 'B'}}))
+    test.eq('A:jan:1', get_qname({'owner': {'rid': 'id0'}, 'type': 'A', 'metadata': {'control_id': 1}}, # Hue Tap
                               {'id0': {'metadata': {'name': 'jan'}, 'type': 'B'}}))
 
 

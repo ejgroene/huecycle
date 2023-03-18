@@ -126,7 +126,7 @@ class cct_cycle(Cct_cycle):
     t_sleep  = time(hour=23) # time you go to sleep
     cct_min  =  2000         # minimum CCT at dusk and dawn
     cct_sun  =  5000         # maximum CCT during day
-    cct_moon = 10000         # maximum CCT during night
+    cct_moon = 10000         # maximum CCT during night (need extended_cct and Color lamp)
     br_dim   =    10         # brightness night light
     br_max   =   100         # full brightness
     assert t_wake.second == t_sleep.second == t_wake.microsecond == t_wake.microsecond == 0

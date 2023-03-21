@@ -40,34 +40,46 @@ def setup2(bridge, name, light, cycle, sceneII, sceneIII, sceneIV):
         3 as reset to cycle.
     """
     onoff, dim_down, reset, dim_up = buttons(bridge.byname, name)
+    last_scene = None
 
     @onoff.handler
     def handle(_, event):
+        nonlocal last_scene
         if light.on.on:
             light_off(light)
         else:
             cycle_cct(light, cycle)
+            last_scene = None
 
     @dim_down.handler
     def handle(_, event):
+        nonlocal last_scene
         if light.on.on:
             dim(light, delta=-25)
         else:
             scene_on(sceneII)
+            last_scene = sceneII
 
     @reset.handler
     def handle(_, event):
+        nonlocal last_scene
         if light.on.on:
-            cycle_cct(light, cycle)
+            if last_scene:
+                scene_on(last_scene)
+            else:
+                cycle_cct(light, cycle)
         else:
             scene_on(sceneIII)
+            last_scene = sceneIII
 
     @dim_up.handler
     def handle(_, event):
+        nonlocal last_scene
         if light.on.on:
             dim(light, delta=+25)
         else:
             scene_on(sceneIV)
+            last_scene = sceneIV
 
 
 def buttons(byname, name):

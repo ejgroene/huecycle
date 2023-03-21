@@ -165,6 +165,12 @@ def light_on_test(mockservice:'light'):
     
 
 @controller
+def scene_on(scene):
+    scene.put({'recall': {'action': 'active'}})
+
+
+
+@controller
 async def light_off(light, after=0, duration=None):
     await asyncio.sleep(after)
     if duration:

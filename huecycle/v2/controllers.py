@@ -17,7 +17,6 @@ def controller(control):
         def control_func(service, *a, **kw):
             assert hasattr(service, 'type'), service
             assert service.type in ('light', 'grouped_light'), service.type
-
             """
                 What happens when a async controller sets another async controller?
                 It must terminate and leave the new one running? Kind of continuation?
@@ -90,7 +89,6 @@ async def simple_controller_does_NOT_remove_running_task(mockservice):
     test.eq('do_something_repeatedly', mockservice.controller.get_coro().__name__)
 
 
-
 @test
 async def advanced_controller_handling(mockservice):
 
@@ -134,24 +132,33 @@ def dim(light, brightness=None, delta=None):  # TODO test
 
 
 @controller
-def light_on(light, ct=3000, brightness=100, use_extended_cct=True):
-    if use_extended_cct:
+def light_on(light, ct=3000, brightness=100):
+ 
+    # if the lamp supports colors, we use extended_cct
+    if light.color:
         x, y = ct_to_xy(ct)
         light.put({
             'on': {'on': True},
             'color': {'xy': {'x': x, 'y': y}},
             'dimming': {'brightness': brightness}
         })
+
+    # lamp only supports color_temperature with a range
     else:
+        schema = light['color_temperature']['mirek_schema']
+        mirek_max = schema['mirek_maximum']
+        mirek_min = schema['mirek_minimum']
+        mirek = min(mirek_max, max(mirek_min, MIREK//ct))
         light.put({
             'on': {'on': True},
-            'color_temperature': {'mirek': MIREK//ct},
+            'color_temperature': {'mirek': mirek},
             'dimming': {'brightness': brightness}
         })
 
 
 @test
 def light_on_test(mockservice:'light'):
+    mockservice.color = {'xy': {'x': 0.5, 'y': 0.5}}
     light_on(mockservice)
     test.eq({'on': {'on': True},
              'color': {'xy': {'x': 0.4366, 'y': 0.4042}},
@@ -162,12 +169,30 @@ def light_on_test(mockservice:'light'):
              'color': {'xy': {'x': 0.5269, 'y': 0.4133}},
              'dimming': {'brightness': 50}},
          mockservice.v[1])
+    del mockservice.color
+    mockservice.color_temperature = {
+        "mirek_schema": {
+					"mirek_minimum": 153,
+					"mirek_maximum": 454,
+				}
+        }
+    light_on(mockservice, ct=10000, brightness=42)
+    test.eq({'on': True}, mockservice.v[2]['on'])
+    test.eq({'brightness': 42}, mockservice.v[2]['dimming'])
+    test.eq({'mirek': 153}, mockservice.v[2]['color_temperature'])
+    light_on(mockservice, ct=1000)
+    test.eq({'mirek': 454}, mockservice.v[3]['color_temperature'])
     
 
 @controller
 def scene_on(scene):
     scene.put({'recall': {'action': 'active'}})
 
+
+@test
+def scene_on_test(mockservice:'scene'):
+    scene_on(mockservice)
+    test.eq({'recall': {'action': 'active'}}, mockservice.v[0])
 
 
 @controller
@@ -194,9 +219,9 @@ async def light_off_test(mockservice):
 
 
 @controller
-async def cycle_cct(light, ct_cycle, t=2*60, use_extended_cct=True):
+async def cycle_cct(light, ct_cycle, t=2*60):
     while True:
-        light_on(light, *ct_cycle.cct_brightness(), use_extended_cct=use_extended_cct)
+        light_on(light, *ct_cycle.cct_brightness())
         await asyncio.sleep(t)
 
 
@@ -212,6 +237,7 @@ def mockcycle():
 
 @test
 async def cct_controller(mockservice, mockcycle):
+    mockservice.color = {'mock': 'iets'}
     cycle_cct(mockservice, mockcycle, t=0.01)
     await asyncio.sleep(0)
     test.eq(1, len(mockservice.v))
@@ -228,7 +254,9 @@ async def cct_controller(mockservice, mockcycle):
 
 @test
 async def cct_cycle_with_group(mockservice:'grouped_light', mockcycle):
+    mockservice.color = {'mock': 'iets'}
     cycle_cct(mockservice, mockcycle, t=0.01)
+    # en?
 
 
    

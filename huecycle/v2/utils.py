@@ -106,3 +106,56 @@ def color_profile_bulb():
         updated = tolemeo._get()
         print(f"{updated.color_temperature.mirek}: {dict(updated.color.xy)}  # {T}")
 
+
+def find_color_temperature_limits(group, index):
+    found_min = 0
+    found_max = 1000
+    owner = index[group['owner']['rid']]
+    for child_ref in (r for r in owner['children'] if r['rtype'] == 'device'):
+        child = index[child_ref['rid']]
+        for light_ref in (r for r in child['services'] if r['rtype'] == 'light'):
+            light = index[light_ref['rid']]
+            schema = light['color_temperature']['mirek_schema']
+            mirek_min = schema['mirek_minimum']
+            mirek_max = schema['mirek_maximum']
+            found_min = max(found_min, mirek_min)
+            found_max = min(found_max, mirek_max)
+    return found_min, found_max
+
+
+@test
+def find_color_temperature_limits_test():
+    group  = {"id": "841634ec-253c-4830-9070-76c65ad09c84",
+              "owner": { "rid": "bf012818-6e32-4d14-b505-e70c620f4d50", "rtype": "room" },
+              "on": { "on": True },
+              "dimming": { "brightness": 0.39 },
+              "color_temperature": {},
+              "type": "grouped_light"}
+    owner  = {"id": "bf012818-6e32-4d14-b505-e70c620f4d50",
+             "children": [ { "rid": "f9cfcdf4-d556-4065-b5ff-70b6bac02859", "rtype": "device" },
+                           { "rid": "1e202743-3d02-4f19-be19-16ff95dc641f", "rtype": "device" },
+                           { "rid": "1e202743-XXXX-4f19-be19-16ff95dc641f", "rtype": "something" }]}
+    devic0 = {"id": "f9cfcdf4-d556-4065-b5ff-70b6bac02859",
+              "services": [ { "rid": "030ec972-79b2-4fee-a207-2c739a4a1d14", "rtype": "light" },
+                            { "rid": "030ec972-YYYY-4fee-a207-2c739a4a1d14", "rtype": "burp" }, ],
+              "type": "device"}
+    devic1 = {"id": "1e202743-3d02-4f19-be19-16ff95dc641f",
+              "services": [ { "rid": "20f9e079-b120-4dfd-98f8-760ecab5fc4a", "rtype": "light" }, ],
+              "type": "device"}
+    light0 = {"id": "030ec972-79b2-4fee-a207-2c739a4a1d14",
+              "color_temperature": { "mirek": 160,
+                                     "mirek_valid": True,
+                                     "mirek_schema": { "mirek_minimum": 166, "mirek_maximum": 555 } },
+              "type": "light"}
+    light1 = {"id": "20f9e079-b120-4dfd-98f8-760ecab5fc4a",
+              "color_temperature": { "mirek": 160,
+                                     "mirek_valid": True,
+                                     "mirek_schema": { "mirek_minimum": 153, "mirek_maximum": 454 } },
+              "type": "light"}
+    index = {}
+    index[owner['id']] = owner
+    index[devic0['id']] = devic0
+    index[devic1['id']] = devic1
+    index[light0['id']] = light0
+    index[light1['id']] = light1
+    test.eq((166, 454), find_color_temperature_limits(group, index))

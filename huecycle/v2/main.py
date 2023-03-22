@@ -37,8 +37,6 @@ kantoor_groep      = byname('grouped_light:Kantoor')
 kantoor_motion     = byname('motion:Sensor Kantoor')
 kantoor_button     = byname('button:Kantoor knopje:1')
 
-tap.setup(kantoor_groep, kantoor_cycle, *tap.buttons(byname, 'button:test tap'))
-
 @kantoor_button.handler
 def handle(button, event):
     press = event['last_event']
@@ -69,7 +67,7 @@ entree_cycle = kantoor_cycle(
 @entree_motion.handler
 def handle(motion, event):
     if event.get('motion'):
-        cycle_cct(entree_groep, entree_cycle, use_extended_cct=False)
+        cycle_cct(entree_groep, entree_cycle)
     else:
         light_off(entree_groep, after=2*60, duration=5000)
 

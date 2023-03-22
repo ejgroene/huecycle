@@ -49,6 +49,10 @@ class bridge(prototype):
             for resource in index.values():
                 if qname := utils.get_qname(resource, index):
                     resource['qname'] = qname
+                    if resource['type'] == 'grouped_light':
+                        mirek_min, mirek_max = utils.find_color_temperature_limits(resource, index)
+                        resource.color_temperature = { 'mirek_schema':
+                                             {'mirek_minimum': mirek_min, 'mirek_maximum': mirek_max}}
                     if qname in byname:
                         print(test.diff2(byname[qname], resource))
                         raise Exception(f"Duplicate name {qname!r}")

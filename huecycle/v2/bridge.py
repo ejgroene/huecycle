@@ -21,6 +21,7 @@ class bridge(prototype):
     apiv2 = property("{baseurl}/clip/v2".format_map)
     apiv1 = property("{baseurl}/api/{username}".format_map)
     headers = property(lambda self: {'hue-application-key': self.username})
+    wait_time = 1
 
 
     async def request(self, *a, **kw): # intended for mocking
@@ -82,11 +83,11 @@ class bridge(prototype):
             try:
                 response = await self.http_get(api="/eventstream/clip/v2", timeout=100)
             except asyncio.exceptions.TimeoutError as e:
-                print(e)
+                print("TIMEOUT:", e)
                 continue
-            except aiohttp.client_exceptions.ClientConnectorError as e:
-                print(e)
-                time.sleep(1)
+            except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ClientConnectorError) as e:
+                print("CONNECT ERRROR:", e)
+                time.sleep(self.wait_time)
                 continue
             for event in response:
                 for data in event['data']:
@@ -101,7 +102,11 @@ class bridge(prototype):
 
 
     def handler(self, h):
-        assert inspect.isfunction(h)
+        assert inspect.isfunction(h), f"A handler must be a function, got {type(h)}"
+        try:
+            inspect.signature(h).bind(self, {})
+        except TypeError:
+            raise TypeError(f"{h.__qualname__} must accept two arguments (resource, event)")
         self.event_handler = h
 
 
@@ -217,27 +222,47 @@ async def handle_timeout():
 
 @test(slow_callback_duration=2)
 async def wait_a_sec_on_connectionerror():
-    gooi = False
+    connection_key = prototype(ssl=None, host=None, port=None)
     call_times = []
     async def request(self, *_, **__):
         nonlocal gooi
         call_times.append(time.monotonic())
         if gooi:
-            gooi = False
-            connection_key = prototype(ssl=None, host=None, port=None)
-            raise aiohttp.client_exceptions.ClientConnectorError(connection_key, OSError(1))
-        gooi = True
+            try:
+                raise gooi
+            finally:
+                gooi = False
         return [{
                 'data': [
-                    {'id': 'event1', 'type': 'happening'},
+                    {'id': len(call_times), 'type': 'happening'},
                 ]},
             ]
     b = bridge(baseurl='err', username='my', request=request, filter_event=lambda s,e: e)
+    test.eq(1, b.wait_time)
+    b.wait_time = 0.1 # makes test go faster
+
     events = b.eventstream()
-    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
-    test.eq({'id': 'event1', 'type': 'happening'}, await anext(events))
-    test.eq(3, len(call_times))
-    test.gt(call_times[2] - call_times[1], 0.9)
+    test.eq(0, len(call_times)) # nothing happens yet
+
+    # first request: Error, so repeated after wait time
+    gooi = aiohttp.client_exceptions.ClientConnectorError(connection_key, OSError(1))
+    test.eq({'id': 2, 'type': 'happening'}, await anext(events))
+    test.eq(2, len(call_times))
+    test.gt(call_times[1] - call_times[0], 0.10)  # 1st req fail, 2nd req after wait time
+
+    # second request: Error, so repeated after wait time
+    gooi = aiohttp.client_exceptions.ClientOSError(connection_key, OSError(1))
+    test.eq({'id': 4, 'type': 'happening'}, await anext(events))
+    test.eq(4, len(call_times))
+    test.lt(call_times[2] - call_times[1], 0.01)  # 2nd req OK, 3rd req immediately
+    test.gt(call_times[3] - call_times[2], 0.10)  # 3rd req fail, 4th req after wait time
+
+    # third request: TimeoutError, so repeated *immediately*
+    gooi = asyncio.exceptions.TimeoutError
+    test.eq({'id': 6, 'type': 'happening'}, await anext(events))
+    test.eq(6, len(call_times))
+    test.lt(call_times[4] - call_times[3], 0.01)  # 4th req timeout, 5th req immediately
+    test.lt(call_times[5] - call_times[4], 0.01)  # 5th req done immediately after 4th
 
 
 @test
@@ -256,3 +281,13 @@ def byname():
     b._byname = {'firl:miep': mies}
     test.eq(mies, b.byname('firl:miep'))
 
+
+@test
+def set_handler():
+    b = bridge()
+    with test.raises(AssertionError, "A handler must be a function, got <class 'int'>"):
+        b.handler(42)
+    b.handler(lambda x,y: (x,y))
+    test.eq((b, 42), b.event_handler(42))
+    with test.raises(TypeError, "set_handler.<locals>.<lambda> must accept two arguments (resource, event)"):
+        b.handler(lambda x: None)

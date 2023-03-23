@@ -131,6 +131,11 @@ def dim(light, brightness=None, delta=None):  # TODO test
             light.put({'dimming_delta': {'action': action, 'brightness_delta': delta}})
 
 
+@test
+def dim_test():
+    pass
+
+
 @controller
 def light_on(light, ct=3000, brightness=100):
  

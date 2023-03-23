@@ -3,6 +3,7 @@ import aiohttp
 import time
 import inspect
 import asyncio
+import traceback
 
 from functools import partialmethod
 from prototype3 import prototype
@@ -22,6 +23,7 @@ class bridge(prototype):
     apiv1 = property("{baseurl}/api/{username}".format_map)
     headers = property(lambda self: {'hue-application-key': self.username})
     wait_time = 1
+    find_color_temperature_limits = utils.find_color_temperature_limits
 
 
     async def request(self, *a, **kw): # intended for mocking
@@ -51,12 +53,11 @@ class bridge(prototype):
                 if qname := utils.get_qname(resource, index):
                     resource['qname'] = qname
                     if resource['type'] == 'grouped_light':
-                        mirek_min, mirek_max = utils.find_color_temperature_limits(resource, index)
+                        mirek_min, mirek_max = self.find_color_temperature_limits(resource, index)
                         resource.color_temperature = { 'mirek_schema':
                                              {'mirek_minimum': mirek_min, 'mirek_maximum': mirek_max}}
                     if qname in byname:
-                        print(test.diff2(byname[qname], resource))
-                        raise Exception(f"Duplicate name {qname!r}")
+                        raise ValueError(f"Duplicate name {qname!r}")
                     byname[qname] = resource
             return index
         try:
@@ -75,7 +76,7 @@ class bridge(prototype):
         """ keep put synchronous as to keep using it simple; hence the task
             no one is interested in the response anyway, we could log errors though TODO
         """
-        asyncio.create_task(self.http_put(path=f'/resource/{self.type}/{self.id}{tail}', json=data))
+        return asyncio.create_task(self.http_put(path=f'/resource/{self.type}/{self.id}{tail}', json=data))
 
 
     async def eventstream(self):
@@ -160,18 +161,86 @@ async def read_objects():
 
 
 @test
-async def write_object():
+async def read_objects_byname():
+    one = {'id': 'one', 'type': 'One'}
+    two = {'id': 'two', 'type': 'Two'}
     async def request(self, method='', path='', headers=None, **kw):
+        return {'data': [one, two]}
+    b = bridge(baseurl='base9', username='pietje', request=request)
+    objs = await b.read_objects()
+    one_ = objs['one']
+    two_ = objs['two']
+    qname1 = one_.qname
+    qname2 = two_.qname
+    test.eq('One:None', qname1) #exactly how this name is found, not important here
+    test.eq('Two:None', qname2)
+    test.truth(qname1)
+    test.truth(qname2)
+    test.eq(one_, b.byname(qname1))
+    test.eq(two_, b.byname(qname2))
+
+
+@test
+async def read_objects_duplicate_qname():
+    one = {'id': 'one', 'type': 'Aap'}
+    two = {'id': 'two', 'type': 'Aap'}
+    async def request(self, method='', path='', headers=None, **kw):
+        return {'data': [one, two]}
+    b = bridge(baseurl='base9', username='pietje', request=request)
+    try:
+        objs = await b.read_objects()
+    except ValueError as e:
+        pass
+    test.eq(b.index['one'], b.byname('Aap:None'))
+
+
+@test
+async def calculate_mirek_limits():
+    one = {'id': 'one', 'type': 'Aap'}
+    two = {'id': 'two', 'type': 'grouped_light'}
+    async def request(self, method='', path='', headers=None, **kw):
+        return {'data': [one, two]}
+    b = bridge(baseurl='base9', username='pietje', request=request)
+    b.find_color_temperature_limits = lambda *_: (42, 84)
+    objs = await b.read_objects()
+    test.eq(None, objs['one'].color_temperature)
+    test.eq({'mirek_schema': {'mirek_minimum': 42, 'mirek_maximum': 84}}, objs['two'].color_temperature)
+
+
+@test
+async def write_object():
+    ran = False
+    async def request(self, method='', path='', headers=None, **kw):
+        nonlocal ran
         if method == 'put':
             assert path == 'b7/clip/v2/resource/OneType/oneId', path
             assert headers == {'hue-application-key': 'jo'}, headers
             assert kw == {'verify_ssl': False, 'json': {'add': 'this'}}, kw
+            ran = True
             return {} 
         else:
+            ran = True
             return {'data': [{'id': 'oneId', 'type': 'OneType'}]}
     b = bridge(baseurl='b7', username='jo', request=request)
     objs = await b.read_objects()
-    b.index['oneId'].put({'add': 'this'})
+    one = b.index['oneId']
+    test.eq((b,), one.prototypes)
+    ran = False
+    f = b.index['oneId'].put({'add': 'this'})
+    await f
+    assert ran
+
+
+@test
+async def put_fails():
+    def request(*_, **__):
+        raise ValueError('a message')
+    b = bridge(baseurl='b7', username='jo', request=request)
+    with test.stderr as e:
+        b.put({1:2})
+        await asyncio.sleep(0)
+    test.contains(e.getvalue(), "ValueError: a message\n")
+    
 
 
 @test

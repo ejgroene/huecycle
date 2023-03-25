@@ -6,6 +6,47 @@ import autotest
 test = autotest.get_tester(__name__)
 
 
+""" Introduces the notion of delegetion or prototyping to Python. The goals are:
+    1. Have an easier model for looking up properties and methods as compared
+       to the Python MRO and the hard to grasp multiple inheritance and 
+       metaclasses. This is accomplished by:
+       A. removing the distinction between classes an objects entirely,
+       B. object creation is by calling things, using "class" is syntactic sugar,
+       C. unify dot notation (.attr) and bracket notion ([attr]) for lookup,
+       D. attribute lookup follow the order of prototypes, depth first.
+
+    2. More easily define or redefine properties with less code:
+       A. an object with some properties: a = prototype(a=10, b=7, ...)
+       B. call it to get a derived object: b = a(b=9)
+       C. a method is any function accepting self (and optionally this)
+          a = prototype(f=lambda self: return 42)
+          a.g = g_defined_elsewhere
+        
+    3. keep it as close to Python as possible,
+       A. a prototype object is just a Python dict,
+       B. it behaves as normal as possible, except for attribute lookup
+    4. when needed, stay close to Javascript, as possible.
+       A. This applies mostly to the distinction between self and this.
+
+       TODO Python          Javascript            Scope       Filtering
+            __contains__    in                      self        -
+            __iter__        for...in                self        str keys/enumerable
+            __getitem__     []                      self        ?
+            __len__         ?
+            keys()          keys()                  this        enumerable
+            values()        values()                this        enumerable
+            items()         entries()               this        enumerable
+                            getOwnPropertyNames()   this        str keys
+                            getOwnPropertySymbols() this        -
+                            ownKeys()               this        -
+                            assign()                this        enumerable
+            **              ...                     this        enumerable
+
+        Prototype does not distinguish between enumerable and other attributes.
+        It could by having an extra dict/removing __slots__ and/or skipping
+        any attributes starting with '_', to keep it Pythonic.
+
+"""
 
 class meta(type):
 
@@ -27,6 +68,11 @@ class meta(type):
 class prototype(dict, metaclass=meta):
 
     __slots__ = ('prototypes', '__id__')
+
+
+    @classmethod
+    def __subclasshook__(subclass):
+        print("__subclasshook__", subclass)
 
 
     def __mro_entries__(this, bases):
@@ -154,6 +200,18 @@ class prototype(dict, metaclass=meta):
         return not self.__eq__(rhs)
 
 
+    def __contains__(self, name):
+        return hasattr(self, name)
+
+            
+    def __iter__(self):
+        for k in super().__iter__():
+            yield k
+        for p in self.prototypes:
+            for k in p:
+                yield k
+
+
     def __str__(self):
         return f"{self.__id__}{super().__str__()}"
 
@@ -167,6 +225,7 @@ class prototype(dict, metaclass=meta):
 
 @test
 def prototype_itself():
+    assert issubclass(prototype, dict)
     assert isinstance(prototype, meta)
     assert isinstance(prototype, type)
     assert ('prototypes', '__id__') == prototype.__slots__
@@ -177,9 +236,9 @@ def prototype_itself():
 def assert_invariants(o):
     assert isinstance(o, dict)
     assert isinstance(o, prototype)
-    assert '__module__' not in o
-    assert '__qualname__' not in o
-    assert '__bases__' not in o
+    assert '__module__' not in o.keys()
+    assert '__qualname__' not in o.keys()
+    assert '__bases__' not in o.keys()
     assert hasattr(o, 'prototypes')
     assert hasattr(o, '__id__')
     #assert not hasattr(o, 'doesnotexists')  # return None
@@ -194,6 +253,10 @@ def create_prototype():
     assert () == creature.prototypes
     assert creature.legs == 4
     assert creature['legs'] == 4
+    assert 'legs' in creature
+    assert {'legs'} == creature.keys()
+    assert [4] == list(creature.values())
+    assert {('legs', 4)} == creature.items()
     assert {'legs': 4} == creature, creature
     fullname = __name__+'.'+'create_prototype.<locals>.creature'
     assert fullname == creature.__id__, creature.__id__
@@ -209,6 +272,10 @@ def set_attribute():
     assert creature.birth == 2001
     creature['birth'] = 2014
     assert creature.birth == 2014
+    assert 'birth' in creature
+    assert {'birth'} == creature.keys()
+    assert [2014] == list(creature.values())
+    assert {('birth', 2014)} == creature.items()
 
 
 @test
@@ -222,11 +289,19 @@ def create_object_with_prototype():
     assert person.birth == 2003
     assert person.legs == 4
     assert person['legs'] == 4
+    assert 'legs' in person
+    assert {'birth'} == person.keys(), person.keys()
+    assert [2003] == list(person.values())
+    assert {('birth', 2003)} == person.items()
     assert str(person).endswith("create_object_with_prototype.<locals>.person{'birth': 2003}")
+    assert ['birth', 'legs'] == [k for k in person]
     person.legs = 2
     assert person.legs == 2
     assert creature.legs == 4
     assert str(person).endswith("create_object_with_prototype.<locals>.person{'birth': 2003, 'legs': 2}")
+    assert {'birth', 'legs'} == person.keys(), person.keys()
+    assert {2003, 2} == set(person.values())
+    assert {('birth', 2003), ('legs', 2)} == person.items()
 
 
 @test
@@ -447,5 +522,4 @@ def getattr_returns_none():
     class boom(prototype):
         pass
     test.eq(None, boom.a)
-    
- 
+

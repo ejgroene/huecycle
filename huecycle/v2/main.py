@@ -7,6 +7,10 @@ import pprint
 from cct_cycle import cct_cycle, location
 from controllers import cycle_cct, light_off, light_on, dim
 
+""" IDEAs
+    1. When a scena called 'Automatic' is activated (by the app)
+       put the light/group on cct_cycle.
+"""
 
 # Personal bridge, on my network and with my key
 my_bridge = bridge.bridge(

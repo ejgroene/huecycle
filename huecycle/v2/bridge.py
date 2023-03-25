@@ -23,7 +23,7 @@ class bridge(prototype):
     apiv1 = property("{baseurl}/api/{username}".format_map)
     headers = property(lambda self: {'hue-application-key': self.username})
     wait_time = 1
-    find_color_temperature_limits = utils.find_color_temperature_limits
+    find_color_temperature_limits = lambda self, *a: utils.find_color_temperature_limits(*a)
 
 
     async def request(self, *a, **kw): # intended for mocking
@@ -117,7 +117,6 @@ class bridge(prototype):
                 print(f"{service.qname!r}: {dict(update)}")
             else:
                 print(f"<unknown>: {dict(update)}")
-                continue
         
             if service.event_handler:
                 service.event_handler(update)
@@ -201,7 +200,7 @@ async def calculate_mirek_limits():
     async def request(self, method='', path='', headers=None, **kw):
         return {'data': [one, two]}
     b = bridge(baseurl='base9', username='pietje', request=request)
-    b.find_color_temperature_limits = lambda *_: (42, 84)
+    b.find_color_temperature_limits = lambda self, resource, index: (42, 84)
     objs = await b.read_objects()
     test.eq(None, objs['one'].color_temperature)
     test.eq({'mirek_schema': {'mirek_minimum': 42, 'mirek_maximum': 84}}, objs['two'].color_temperature)

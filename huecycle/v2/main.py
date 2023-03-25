@@ -6,6 +6,7 @@ import tap
 import pprint
 from cct_cycle import cct_cycle, location
 from controllers import cycle_cct, light_off, light_on, dim
+from twilight import twilight
 
 """ IDEAs
     1. When a scena called 'Automatic' is activated (by the app)
@@ -61,6 +62,7 @@ def handle(motion, event):
 ##### Entree #####
 entree_motion      = byname('motion:Sensor Entree')
 entree_groep       = byname('grouped_light:Entree')
+entree_lightlevel  = byname('light_level:Sensor Entree')
 
 entree_cycle = kantoor_cycle(
           cct_min  = 2200,
@@ -84,6 +86,14 @@ keuken_scene_III  = byname('scene:room:Keuken:Tap:III')
 keuken_scene_IV   = byname('scene:room:Keuken:Tap:IV')
 
 woon_cycle        = kantoor_cycle()
+
+def set_cycle(*_):
+    cycle_cct(keuken_groep, woon_cycle)
+
+def turn_off(*_):
+    light_off(keuken_groep)
+
+twilight(entree_lightlevel, set_cycle, turn_off, threshold=5000)
 
 tap.setup2(my_bridge, 'button:Keuken Tap', keuken_groep, woon_cycle, keuken_scene_II, keuken_scene_III, keuken_scene_IV)
 

@@ -4,19 +4,15 @@ test = autotest.get_tester(__name__)
 import asyncio
 from datetime import time, datetime, timedelta
 from zoneinfo import ZoneInfo
-from ephem import Observer, Sun, localtime, to_timezone
 from math import sin, pi
 from prototype3 import prototype
+from location import location
 
 
 MIREK = 10**6
 
 utc = ZoneInfo('UTC')
 day = timedelta(hours=24)
-
-
-def ephem_to_datetime(e):
-    return to_timezone(e, utc).replace(second=0, microsecond=0)
 
 
 
@@ -43,9 +39,9 @@ class Cct_cycle(prototype):
         """
         t_now     = t_given.astimezone(utc) if t_given else datetime.now().astimezone(utc)
         today     = t_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc)
-        t_rise    = ephem_to_datetime(self.loc.next_rising (self.sun, start=today))
-        t_noon    = ephem_to_datetime(self.loc.next_transit(self.sun, start=today))
-        t_set     = ephem_to_datetime(self.loc.next_setting(self.sun, start=today))
+        t_rise    = self.loc.next_rising (start=today)
+        t_noon    = self.loc.next_transit(start=today)
+        t_set     = self.loc.next_setting(start=today)
         t_wake    = datetime.combine(today, self.t_wake ).astimezone(utc)
         t_sleep   = datetime.combine(today, self.t_sleep).astimezone(utc)
         t_start   = min(t_wake, t_rise)
@@ -108,20 +104,8 @@ class Cct_cycle(prototype):
         return round(MIREK/mirek), round(brightness)
     
 
-def location(lat, lon, elevation=6.0):
-    assert isinstance(lat, str), lat
-    assert isinstance(lon, str), lon
-    assert isinstance(elevation, float), elevation
-    obs      = Observer()
-    obs.lon  = lon        # longitude in "52:01.224" format
-    obs.lat  = lat        # latitude in "5:41.065" format
-    obs.elevation = 6.0   # twilight angle (civil = 6)
-    return obs
-
-
 class cct_cycle(Cct_cycle):
     loc      = None          # provide geographic location
-    sun      = Sun()         # used for tracking sun rise and set
     t_wake   = time(hour= 7) # time you wake up
     t_sleep  = time(hour=23) # time you go to sleep
     cct_min  =  2000         # minimum CCT at dusk and dawn

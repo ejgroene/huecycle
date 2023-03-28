@@ -205,11 +205,15 @@ class prototype(dict, metaclass=meta):
 
             
     def __iter__(self):
+        seen = set()
         for k in super().__iter__():
+            seen.add(k)
             yield k
         for p in self.prototypes:
             for k in p:
-                yield k
+                if not k in seen:
+                    seen.add(k)
+                    yield k
 
 
     def __str__(self):
@@ -523,3 +527,16 @@ def getattr_returns_none():
         pass
     test.eq(None, boom.a)
 
+
+@test
+def iter_unique():
+    p0 = prototype(a=10)
+    p1 = p0(a=11)
+    test.eq(['a'], [a for a in p1])
+
+
+#@test
+def ununumerable_attrs():
+    class a(prototype):
+        _x = 10
+    test.eq(None, a._x)

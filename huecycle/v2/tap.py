@@ -1,3 +1,4 @@
+from functools import partial
 from controllers import cycle_cct, light_off, light_on, dim, scene_on
 
 def setup(light, cycle, onoff, dim_down=None, reset=None, dim_up=None):
@@ -82,6 +83,20 @@ def setup2(bridge, name, light, cycle, sceneII, sceneIII, sceneIV):
             last_scene = sceneIV
 
 
-def buttons(byname, name):
-    return (byname(f'{name}:{n}') for n in (1,2,3,4))
+def buttons(byname, name, n=4):
+    return [byname(f'{name}:{i}') for i in range(1, 1 + n)]
+
+
+def setup4(bridge, name, light, *actions):
+    n = len(actions)
+    btns = buttons(bridge.byname, name, n)
+    def make_handler(on, off):
+        def handler(service, event):
+            if event.button_report.event == 'initial_press':
+                action = on if light.on.on else off
+                action(light, event)
+        return handler
+    for btn, onoff in zip(btns, actions):
+        btn.handler(make_handler(*onoff))
+
 

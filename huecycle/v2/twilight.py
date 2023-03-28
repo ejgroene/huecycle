@@ -7,10 +7,14 @@ import autotest
 test = autotest.get_tester(__name__)
 
 
-def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=10, dt=datetime_py):
-    window = collections.deque([0] * window_size, maxlen=window_size)
+# a reasonable window size from experiments with log data
+W = 10
+noon = datetime_py.time(13,00)
+
+
+def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetime_py):
+    window = collections.deque(maxlen=window_size)
     lock = None
-    noon = dt.time(13,00)
 
     @sensor.handler
     def detect_twilight(sensor, event):
@@ -18,6 +22,8 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=10, dt=dateti
         level = event['light']['light_level']
         window.append(level)
         avg = round(statistics.mean(window))
+
+        print("LEVEL:", avg, lock)
 
         # it is dawn
         if dt.datetime.now().time() < noon:
@@ -36,6 +42,13 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=10, dt=dateti
             if avg < threshold:
                 on_dusk(sensor, avg)
                 lock = 'dusk'
+
+    def is_twilight():
+        """ it it still twilight or has the light already been turned on (dusk) or off (dawn)?
+            Twilight being either before light (morning) or before dark (evening) """
+        return not lock
+
+    return is_twilight
         
 
     
@@ -72,9 +85,11 @@ def init_twilight():
     calls = []
     def on_twilight(sensor, avg_ll):
         calls.append((sensor, avg_ll))
-    t = twilight(sensor, on_twilight, on_twilight)
+    is_twilight = twilight(sensor, on_twilight, on_twilight)
+    test.eq(True, is_twilight())
     sensor.event_handler(ll_event(10))
-    test.eq([(sensor, 1)], calls)
+    test.eq([(sensor, 10)], calls)
+    test.eq(False, is_twilight())
    
  
 @test
@@ -86,16 +101,16 @@ def twilight_init():
     def on_dusk(sensor, avg_ll):
         dusks.append((sensor, avg_ll))
     dt_mock = datetime_mock(_now=(2000, 3, 31, 8, 30))
-    t = twilight(sensor, on_dawn, on_dusk, threshold=100, window_size=3, dt=dt_mock)
-    # fill up window
-    sensor.event_handler(ll_event(100))
-    sensor.event_handler(ll_event(100))
-    sensor.event_handler(ll_event(100))
+    is_twilight = twilight(sensor, on_dawn, on_dusk, threshold=100, window_size=3, dt=dt_mock)
+    sensor.event_handler(ll_event( 50))
+    sensor.event_handler(ll_event(150))
     test.eq([], dawns)
     test.eq([], dusks)
+    test.eq(True, is_twilight())
     sensor.event_handler(ll_event(102))
     test.eq([(sensor, 101)], dawns)
     test.eq([], dusks)
+    test.eq(False, is_twilight())
     # nothing happens anymore
     sensor.event_handler(ll_event(102))
     sensor.event_handler(ll_event(300))
@@ -106,13 +121,16 @@ def twilight_init():
     sensor.event_handler(ll_event(200))
     test.eq([(sensor, 101)], dawns)
     test.eq([], dusks)
+    test.eq(False, is_twilight())
 
     dt_mock._now = 2000, 3, 31, 15, 00
     sensor.event_handler(ll_event(100))
+    test.eq(True, is_twilight())
     sensor.event_handler(ll_event(50))
     sensor.event_handler(ll_event(50))
     test.eq([(sensor, 101)], dawns)
     test.eq([(sensor, 67)], dusks)
+    test.eq(False, is_twilight())
     # nothing happens anymore
     sensor.event_handler(ll_event(500))
     sensor.event_handler(ll_event( 50))
@@ -120,4 +138,5 @@ def twilight_init():
     sensor.event_handler(ll_event( 50))
     test.eq([(sensor, 101)], dawns)
     test.eq([(sensor, 67)], dusks)
+    test.eq(False, is_twilight())
     

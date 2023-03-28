@@ -3,6 +3,7 @@ import datetime
 import bridge
 import utils
 import tap
+import timers
 import pprint
 from cct_cycle import cct_cycle, location
 from controllers import cycle_cct, light_off, light_on, dim
@@ -31,12 +32,15 @@ utils.print_overview(my_bridge)
 byname = my_bridge.byname
 
 
-
-##### Kantoor #####
-kantoor_cycle = cct_cycle(
+##### Algemeen #####
+algemeen_cycle = cct_cycle(
           loc      = my_location,
           t_wake   = datetime.time(hour= 7),
           t_sleep  = datetime.time(hour=23))
+
+
+##### Kantoor #####
+kantoor_cycle = algemeen_cycle()
 
 kantoor_groep      = byname('grouped_light:Kantoor')
 kantoor_motion     = byname('motion:Sensor Kantoor')
@@ -80,25 +84,49 @@ def handle(motion, event):
 
 
 ##### Keuken #####
+keuken_cycle      = algemeen_cycle()
+keuken_aanrecht   = byname('light:Keuken Aanrecht')
+keuken_schemer    = byname('light:Keuken Schemerlamp')
 keuken_groep      = byname('grouped_light:Keuken')
 keuken_scene_II   = byname('scene:room:Keuken:Tap:II')
 keuken_scene_III  = byname('scene:room:Keuken:Tap:III')
 keuken_scene_IV   = byname('scene:room:Keuken:Tap:IV')
 
-woon_cycle        = kantoor_cycle()
+tap.setup2(my_bridge, 'button:Keuken Tap', keuken_schemer, keuken_cycle, keuken_scene_II, keuken_scene_III, keuken_scene_IV)
 
-def set_cycle(*_):
-    cycle_cct(keuken_groep, woon_cycle)
-
-def turn_off(*_):
-    light_off(keuken_groep)
-
-twilight(entree_lightlevel, set_cycle, turn_off, threshold=5000)
-
-tap.setup2(my_bridge, 'button:Keuken Tap', keuken_groep, woon_cycle, keuken_scene_II, keuken_scene_III, keuken_scene_IV)
+is_twilight = twilight(entree_lightlevel,
+    lambda sensor, avg: light_off(keuken_schemer),
+    lambda sensor, avg: cycle_cct(keuken_schemer, keuken_cycle),
+    threshold=4000) 
 
 
+tap.setup4(my_bridge, 'button:Aanrecht Dimmer', keuken_aanrecht,
+    #   on       off
+    (lambda light, event: cycle_cct(light, keuken_cycle), lambda light, event: cycle_cct(light, keuken_cycle)),
+    (lambda light, event: dim(light, delta = +25), utils.noop),
+    (lambda light, event: dim(light, delta = -25), utils.noop),
+    (lambda light, event: light_off(light), utils.noop))
+
+
+
+
+##### Badkamer #####
+badkamer_groep     = byname('grouped_light:Badkamer')
+badkamer_scene_II  = byname('scene:room:Badkamer:Tap:II')
+badkamer_scene_III = byname('scene:room:Badkamer:Tap:III')
+badkamer_scene_IV  = byname('scene:room:Badkamer:Tap:IV')
+
+badkamer_cycle     = algemeen_cycle()
+tap.setup2(my_bridge, 'button:Badkamer Tap', badkamer_groep, badkamer_cycle, badkamer_scene_II, badkamer_scene_III, badkamer_scene_IV)
+
+
+##### Algemeen (timers) #####
+async def main():
+    timers.at_time_do(datetime.time( 7,00), lambda: cycle_cct(keuken_groep, keuken_cycle) if is_twilight() else None)
+    timers.at_time_do(datetime.time(23,00), lambda: light_off(keuken_groep))
+    await my_bridge.dispatch_events()
+    
 
 
 ##### Run bridge event dispatcher forever #####
-asyncio.run(my_bridge.dispatch_events(), debug=True)
+asyncio.run(main(), debug=True)

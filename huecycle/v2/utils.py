@@ -1,6 +1,7 @@
 import autotest
 test = autotest.get_tester(__name__)
 
+def noop(*_): pass
 
 def print_overview(bridge):
     def print_series(pre, series, seen, indent):

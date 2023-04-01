@@ -116,11 +116,11 @@ def find_color_temperature_limits(group, index):
         child = index[child_ref['rid']]
         for light_ref in (r for r in child['services'] if r['rtype'] == 'light'):
             light = index[light_ref['rid']]
-            schema = light['color_temperature']['mirek_schema']
-            mirek_min = schema['mirek_minimum']
-            mirek_max = schema['mirek_maximum']
-            found_min = max(found_min, mirek_min)
-            found_max = min(found_max, mirek_max)
+            if schema := light.get('color_temperature', {}).get('mirek_schema'):  #TODO test condition
+                mirek_min = schema['mirek_minimum']
+                mirek_max = schema['mirek_maximum']
+                found_min = max(found_min, mirek_min)
+                found_max = min(found_max, mirek_max)
     return found_min, found_max
 
 

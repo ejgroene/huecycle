@@ -1,3 +1,4 @@
+import sys
 import asyncio
 import aiohttp
 import time
@@ -29,8 +30,11 @@ class bridge(prototype):
     async def request(self, *a, **kw): # intended for mocking
         async with aiohttp.ClientSession() as session:
             async with session.request(*a, **kw) as response:
-                assert response.status == 200, (f"{a} {kw}", await response.text())
-                return await response.json()
+                js = await response.json()
+                if response.status != 200:
+                    print(f"HTTP ERROR Request: {a} {kw}\nResponse: {js}", file=sys.stderr)
+                else:
+                    return js
     
 
     async def http_get(self, method='get', api='/clip/v2', path='', **kw):
@@ -84,10 +88,11 @@ class bridge(prototype):
             try:
                 response = await self.http_get(api="/eventstream/clip/v2", timeout=100)
             except asyncio.exceptions.TimeoutError as e:
-                print("TIMEOUT:", e)
+                print("Eventstream TIMEOUT, reconnecting...", e)
                 continue
-            except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ClientConnectorError) as e:
-                print("CONNECT ERRROR:", e)
+            except aiohttp.client_exceptions.ClientError as e:
+                # ClientOSError, ClientConnectorError ServerDisconnectedError, ...
+                print("Eventstream ERROR, sleeping and trying again...", e)
                 time.sleep(self.wait_time)
                 continue
             for event in response:
@@ -113,19 +118,18 @@ class bridge(prototype):
 
     async def dispatch_events(self):
         async for service, update in self.eventstream():
-            if service:
+            if not service:
+                print(f"<unknown>: {dict(update)}", file=sys.stderr)
+                continue # newly added service TODO: reload
+            if service.event_handler:                 # TODO test condition (new devices added?)
                 print(f"{service.qname!r}: {dict(update)}")
-            else:
-                print(f"<unknown>: {dict(update)}")
-        
-            if service.event_handler:
                 service.event_handler(update)
-                continue
-            """ update internal state to reflect changes """
-            old = service.keys()
-            service.update(update)
-            diff = old ^ service.keys()
-            assert diff <= {'temperature_valid'}, diff
+            else:
+                """ update internal state to reflect changes """
+                old = service.keys()
+                service.update(update)
+                diff = old ^ service.keys()
+                assert diff <= {'temperature_valid'}, diff
 
 
 

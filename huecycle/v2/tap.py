@@ -94,9 +94,24 @@ def setup4(bridge, name, light, *actions):
         def handler(service, event):
             if event.button_report.event == 'initial_press':
                 action = on if light.on.on else off
-                action(light, event)
+                action()
         return handler
     for btn, onoff in zip(btns, actions):
         btn.handler(make_handler(*onoff))
 
+
+def setup5(device, is_on, *actions):
+    n = len(actions)
+    name = device.qname.split(':')[-1]
+    print("NAME:", name)
+    btns = [device.byname(f'button:{name}:{i}') for i in range(1, 1 + n)]
+    def make_handler(on, off):
+        def handler(service, event):
+            if event.button_report.event == 'initial_press':
+                action = on if is_on() else off
+                action()
+        return handler
+    for btn, onoff in zip(btns, actions):
+        btn.handler(make_handler(*onoff))
+    
 

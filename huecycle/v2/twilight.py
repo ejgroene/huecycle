@@ -21,9 +21,12 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
         nonlocal lock
         level = event['light']['light_level']
         window.append(level)
-        avg = round(statistics.mean(window))
 
-        print("LEVEL:", avg, lock)
+        # start up behaviour, do not engage until a certain number of measurements
+        if len(window) < window_size // 2:
+            return
+
+        avg = round(statistics.mean(window))
 
         # it is dawn
         if dt.datetime.now().time() < noon:
@@ -31,7 +34,8 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
                 return
             lock = None
             if avg > threshold:
-                on_dawn(sensor, avg)
+                print("DAWN:", avg)
+                on_dawn()
                 lock = 'dawn'
 
         # it is dusk
@@ -40,7 +44,8 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
                 return
             lock = None
             if avg < threshold:
-                on_dusk(sensor, avg)
+                print("DUSK:", avg)
+                on_dusk()
                 lock = 'dusk'
 
     def is_twilight():
@@ -83,33 +88,47 @@ def init_twilight():
     """ without mocking datetime, see if it does anything at all,
         so we can assure it calls datetime correctly """
     calls = []
-    def on_twilight(sensor, avg_ll):
-        calls.append((sensor, avg_ll))
-    is_twilight = twilight(sensor, on_twilight, on_twilight)
+    def on_twilight():
+        calls.append(1)
+    is_twilight = twilight(sensor, on_twilight, on_twilight, threshold=20, window_size=2)
     test.eq(True, is_twilight())
-    sensor.event_handler(ll_event(10))
-    test.eq([(sensor, 10)], calls)
+    sensor.event_handler(ll_event(10))   # this one triggers in the morning
+    sensor.event_handler(ll_event(50))   # this one in the evening
+    test.eq([1], calls)
     test.eq(False, is_twilight())
+
+
+@test
+def wait_for_minimum_number_of_measurements():
+    dt_mock = datetime_mock(_now=(2000, 3, 31, 8, 30))
+    calls = []
+    def on_twilight():
+        calls.append(1)
+    twilight(sensor, on_twilight, on_twilight, threshold=10, window_size=10, dt=dt_mock)
+    sensor.event_handler(ll_event( 50))
+    sensor.event_handler(ll_event( 50))
+    sensor.event_handler(ll_event( 50))
+    sensor.event_handler(ll_event( 50))
+    sensor.event_handler(ll_event( 50))
+    test.eq([1], calls)
+
    
  
 @test
-def twilight_init():
-    dawns = []
-    dusks = []
-    def on_dawn(sensor, avg_ll):
-        dawns.append((sensor, avg_ll))
-    def on_dusk(sensor, avg_ll):
-        dusks.append((sensor, avg_ll))
+def twilight_event_handling():
+    calls = []
+    def on_dawn():
+        calls.append('dawn')
+    def on_dusk():
+        calls.append('dusk')
     dt_mock = datetime_mock(_now=(2000, 3, 31, 8, 30))
     is_twilight = twilight(sensor, on_dawn, on_dusk, threshold=100, window_size=3, dt=dt_mock)
     sensor.event_handler(ll_event( 50))
     sensor.event_handler(ll_event(150))
-    test.eq([], dawns)
-    test.eq([], dusks)
+    test.eq([], calls)
     test.eq(True, is_twilight())
     sensor.event_handler(ll_event(102))
-    test.eq([(sensor, 101)], dawns)
-    test.eq([], dusks)
+    test.eq(['dawn'], calls)
     test.eq(False, is_twilight())
     # nothing happens anymore
     sensor.event_handler(ll_event(102))
@@ -119,8 +138,7 @@ def twilight_init():
     sensor.event_handler(ll_event(100))
     sensor.event_handler(ll_event(100))
     sensor.event_handler(ll_event(200))
-    test.eq([(sensor, 101)], dawns)
-    test.eq([], dusks)
+    test.eq(['dawn'], calls)
     test.eq(False, is_twilight())
 
     dt_mock._now = 2000, 3, 31, 15, 00
@@ -128,15 +146,13 @@ def twilight_init():
     test.eq(True, is_twilight())
     sensor.event_handler(ll_event(50))
     sensor.event_handler(ll_event(50))
-    test.eq([(sensor, 101)], dawns)
-    test.eq([(sensor, 67)], dusks)
+    test.eq(['dawn', 'dusk'], calls)
     test.eq(False, is_twilight())
     # nothing happens anymore
     sensor.event_handler(ll_event(500))
     sensor.event_handler(ll_event( 50))
     sensor.event_handler(ll_event( 50))
     sensor.event_handler(ll_event( 50))
-    test.eq([(sensor, 101)], dawns)
-    test.eq([(sensor, 67)], dusks)
+    test.eq(['dawn', 'dusk'], calls)
     test.eq(False, is_twilight())
     

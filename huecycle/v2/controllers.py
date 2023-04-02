@@ -124,7 +124,8 @@ async def advanced_controller_handling(mockservice):
 
 
 @controller
-def dim(light, brightness=None, delta=None):  # TODO test
+def dim(light, brightness=None, delta=None):
+    assert bool(brightness) ^ bool(delta), "specify either brightness or delta"
     assert brightness is None or 0 < brightness <= 100, brightness
     assert delta is None or -100 < delta < 100, delta
     if light.on.on:
@@ -137,8 +138,35 @@ def dim(light, brightness=None, delta=None):  # TODO test
 
 
 @test
-def dim_test():
-    pass
+def dim_test(mockservice):
+    with test.raises(AssertionError, "specify either brightness or delta"):
+        dim(mockservice)
+    with test.raises(AssertionError, "specify either brightness or delta"):
+        dim(mockservice, delta=0)
+    with test.raises(AssertionError, "specify either brightness or delta"):
+        dim(mockservice, brightness=0)
+    with test.raises(AssertionError, "specify either brightness or delta"):
+        dim(mockservice, brightness=50, delta=10)
+    with test.raises(AssertionError, "101"):
+        dim(mockservice, brightness=101)
+    with test.raises(AssertionError, "-1"):
+        dim(mockservice, brightness=-1)
+    with test.raises(AssertionError, "100"):
+        dim(mockservice, delta=+100)
+    with test.raises(AssertionError, "-100"):
+        dim(mockservice, delta=-100)
+    mockservice.on = {'on': True}
+    dim(mockservice, delta=-10)
+    test.eq({'dimming_delta': {'action': 'down', 'brightness_delta': 10}}, mockservice.v[0])
+    dim(mockservice, delta=+10)
+    test.eq({'dimming_delta': {'action': 'up', 'brightness_delta': 10}}, mockservice.v[1])
+    dim(mockservice, brightness=40)
+    test.eq({'dimming': {'brightness': 40}}, mockservice.v[2])
+    mockservice.on = {'on': False}
+    test.eq(3, len(mockservice.v))
+    dim(mockservice, brightness=40)
+    dim(mockservice, delta=+10)
+    test.eq(3, len(mockservice.v))
 
 
 @controller
@@ -148,7 +176,7 @@ def light_on(light, ct=3000, brightness=100):
     if light.color:
         x, y = ct_to_xy(ct)
         light.put({
-            'on': {'on': True},
+            'on': {'on': True},                       # TODO avoid unnecessary on
             'color': {'xy': {'x': x, 'y': y}},
             'dimming': {'brightness': brightness}
         })
@@ -160,7 +188,7 @@ def light_on(light, ct=3000, brightness=100):
         mirek_min = schema['mirek_minimum']
         mirek = min(mirek_max, max(mirek_min, MIREK//ct))
         light.put({
-            'on': {'on': True},
+            'on': {'on': True},                       # TODO avoid unnecessary on
             'color_temperature': {'mirek': mirek},
             'dimming': {'brightness': brightness}
         })
@@ -168,7 +196,7 @@ def light_on(light, ct=3000, brightness=100):
     # dim only lamp #TODO test
     else:
         light.put({
-            'on': {'on': True},
+            'on': {'on': True},                       # TODO avoid unnecessary on
             'dimming': {'brightness': brightness}
         })
 

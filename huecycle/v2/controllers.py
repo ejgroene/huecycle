@@ -1,6 +1,9 @@
 import inspect
 import asyncio
-from datetime import time, datetime, timedelta
+import random
+import time
+import statistics
+from datetime import datetime, timedelta
 from prototype3 import prototype
 from extended_cct import ct_to_xy, MIREK
 
@@ -143,7 +146,6 @@ def light_on(light, ct=3000, brightness=100):
  
     # if the lamp supports colors, we use extended_cct
     if light.color:
-        print("COLOR", light.get('qname'))
         x, y = ct_to_xy(ct)
         light.put({
             'on': {'on': True},
@@ -152,8 +154,7 @@ def light_on(light, ct=3000, brightness=100):
         })
 
     # lamp only supports color_temperature with a range
-    else:
-        print("COLOR TEMPERATURE", light.get('qname'))
+    elif light.color_temperature:
         schema = light['color_temperature']['mirek_schema']
         mirek_max = schema['mirek_maximum']
         mirek_min = schema['mirek_minimum']
@@ -163,6 +164,14 @@ def light_on(light, ct=3000, brightness=100):
             'color_temperature': {'mirek': mirek},
             'dimming': {'brightness': brightness}
         })
+
+    # dim only lamp #TODO test
+    else:
+        light.put({
+            'on': {'on': True},
+            'dimming': {'brightness': brightness}
+        })
+
 
 
 @test
@@ -309,3 +318,26 @@ async def timer_checks_args():
         pass
     with test.raises(TypeError, f"missing a required argument: 'a'"):
         timer(t, f) 
+
+
+def randomize(dt_min, *fns):
+    loop = asyncio.get_running_loop()
+    for fn in fns:
+        delay = random.uniform(0, dt_min * 60)
+        loop.call_later(delay, fn)
+    
+
+@test(timeout=10)
+async def randomize_test():
+    times = []
+    def a():
+        times.append(time.monotonic() - t0)
+    t0 = time.monotonic()
+    # 100 times in 0.1 s => 1 ms per iteration
+    randomize(0.1/60, *((a,)*100))
+    await asyncio.sleep(0.1)
+    test.eq(100, len(times))
+    # perfect stdev should be slighty larger than 0.03
+    test.gt(statistics.stdev(times), .025)
+
+

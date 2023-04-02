@@ -16,13 +16,14 @@ def at_time_do(t, callback, dt=datetime):
         nonlocal t
         while True:
             s = (t - dt.datetime.now()).total_seconds()
-            print("    TIMER: sleeping:", s)
-            await asyncio.sleep(s)
-            print("    TIMER: calling:", callback)
-            try:
-                callback()
-            except Exception as e:
-                print("   TIMER EXC:", e)
+            if s > 0:                                        # TODO test condition
+                print("    TIMER: sleeping:", s)
+                await asyncio.sleep(s)
+                print("    TIMER: calling:", callback)
+                try:
+                    callback()
+                except Exception as e:
+                    print("   TIMER EXC:", e)
             t += one_day
     return asyncio.create_task(timer_task())   
 

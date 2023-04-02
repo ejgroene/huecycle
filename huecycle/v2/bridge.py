@@ -25,16 +25,20 @@ class bridge(prototype):
     headers = property(lambda self: {'hue-application-key': self.username})
     wait_time = 1
     find_color_temperature_limits = lambda self, *a: utils.find_color_temperature_limits(*a)
+    putlock = asyncio.Lock()
 
 
     async def request(self, *a, **kw): # intended for mocking
         async with aiohttp.ClientSession() as session:
             async with session.request(*a, **kw) as response:
-                js = await response.json()
                 if response.status != 200:
-                    print(f"HTTP ERROR Request: {a} {kw}\nResponse: {js}", file=sys.stderr)
+                    try:
+                        msg = await response.json()
+                    except:
+                        msg = await response.text()
+                    logging.error(f"HTTP {response.status}:\nResource: {self.qname}\nRequest: {a} {kw}\nResponse: {msg}")
                 else:
-                    return js
+                    return await response.json()
     
 
     async def http_get(self, method='get', api='/clip/v2', path='', **kw):
@@ -42,7 +46,10 @@ class bridge(prototype):
         return await self.request(method, path, verify_ssl=False, headers=self.headers, **kw)
 
 
-    http_put = partialmethod(http_get, method='put')
+    async def http_put(self, *a, **k):
+        async with self.putlock:        # TODO test
+            r = await self.http_get('put', *a, **k)
+            await asyncio.sleep(0.025)  # this limits the rate uf puts (Hue limitation)
 
 
     def read_objects(self):
@@ -57,8 +64,9 @@ class bridge(prototype):
                 if qname := utils.get_qname(resource, index):
                     resource['qname'] = qname
                     if resource['type'] == 'grouped_light':
-                        mirek_min, mirek_max = self.find_color_temperature_limits(resource, index)
-                        resource.color_temperature = { 'mirek_schema':
+                        if resource.color_temperature is not None:  # TODO test condition (dim only lamp)
+                            mirek_min, mirek_max = self.find_color_temperature_limits(resource, index)
+                            resource.color_temperature = { 'mirek_schema':
                                              {'mirek_minimum': mirek_min, 'mirek_maximum': mirek_max}}
                     if qname in byname:
                         raise ValueError(f"Duplicate name {qname!r}")
@@ -76,7 +84,7 @@ class bridge(prototype):
         return self._byname.get(name)
         
 
-    def put(self, data, tail=''):
+    def put(self, this, data, tail=''):
         """ keep put synchronous as to keep using it simple; hence the task
             no one is interested in the response anyway, we could log errors though TODO
         """
@@ -200,7 +208,7 @@ async def read_objects_duplicate_qname():
 @test
 async def calculate_mirek_limits():
     one = {'id': 'one', 'type': 'Aap'}
-    two = {'id': 'two', 'type': 'grouped_light'}
+    two = {'id': 'two', 'type': 'grouped_light', 'color_temperature': {}}
     async def request(self, method='', path='', headers=None, **kw):
         return {'data': [one, two]}
     b = bridge(baseurl='base9', username='pietje', request=request)

@@ -106,20 +106,20 @@ keuken_off               = lambda: [keuken_aanrecht_off(), keuken_schemer_off()]
 
 tap.setup2(my_bridge, 'button:Keuken Tap', keuken_schemer, keuken_cycle, keuken_scene_II, keuken_scene_III, keuken_scene_IV)
 
-is_twilight = twilight(entree_lightlevel, keuken_off, keuken_on, threshold=4000) 
-
 tap.setup4(my_bridge, 'button:Aanrecht Dimmer', keuken_aanrecht,
     (keuken_aanrecht_on      , keuken_aanrecht_on),
     (keuken_aanrecht_brighten, utils.noop),
     (keuken_aanrecht_dim     , utils.noop),
     (keuken_aanrecht_off     , utils.noop))
 
-#keuken_aanrecht_dimmer = byname('device:Aanrecht Dimmer')
-#tap.setup5(keuken_aanrecht_dimmer, lambda: keuken_aanrecht.on,
-#    (keuken_aanrecht_on      , keuken_aanrecht_on),
-#    (keuken_aanrecht_brighten, utils.noop),
-#    (keuken_aanrecht_dim     , utils.noop),
-#    (keuken_aanrecht_off     , utils.noop))
+
+
+##### Woonkamer #####
+woonkamer_cycle    = algemeen_cycle()
+#woonkamer_groep    = byname('grouped_light:Woonkamer')
+woonkamer_nis      = byname('light:Woonkamer Nis')
+woonkamer_on       = lambda: cycle_cct(woonkamer_nis, woonkamer_cycle)
+woonkamer_off      = lambda: light_off(woonkamer_nis)
 
 
 
@@ -136,21 +136,35 @@ tap.setup2(my_bridge, 'button:Badkamer Tap', badkamer_groep, badkamer_cycle, bad
 ##### Overloop #####
 overloop_cycle  = algemeen_cycle(br_dim=1, cct_min=1667)
 overloop_nok    = byname('light:Overloop Nok')
+overloop_on     = lambda: cycle_cct(overloop_nok, overloop_cycle)
+overloop_off    = lambda: light_off(overloop_nok)
+
 
 tap.setup4(my_bridge, 'button:Overloop Tap', overloop_nok,
-    (lambda: light_off(overloop_nok), lambda: cycle_cct(overloop_nok, overloop_cycle)),
+    (overloop_off                          , overloop_on),
     (lambda: dim(overloop_nok, delta = -25), utils.noop),
-    (lambda: cycle_cct(overloop_nok, overloop_cycle), utils.noop),
+    (overloop_on                           , utils.noop),
     (lambda: dim(overloop_nok, delta = +25), utils.noop))
 
 
 
+##### Terras #####
+terras_cycle   = algemeen_cycle()
+terras_lampen  = byname('grouped_light:Terras')
+terras_on      = lambda: cycle_cct(terras_lampen, terras_cycle)
+terras_off     = lambda: light_off(terras_lampen)
+
+
 
 ##### Algemeen (timers) #####
+twilight_on  = lambda: randomize(10, keuken_on,  terras_on,  overloop_on,  woonkamer_on)
+twilight_off = lambda: randomize(10, keuken_off, terras_off, overloop_off, woonkamer_off)
+is_twilight = twilight(entree_lightlevel, on_dawn=twilight_off, on_dusk=twilight_on, threshold=4000) 
+
+
 async def main():
-    cycle_cct(overloop_nok, overloop_cycle) # always turn on
-    timers.at_time_do(datetime.time( 7,00), keuken_on if is_twilight() else None)
-    timers.at_time_do(datetime.time(23,20), keuken_off)
+    timers.at_time_do(datetime.time( 7,00), lambda: twilight_on() if is_twilight() else None)
+    timers.at_time_do(datetime.time(23,00), twilight_off) # TODO randomize
     await my_bridge.dispatch_events()
     
 

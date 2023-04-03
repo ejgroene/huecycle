@@ -6,7 +6,7 @@ import tap
 import timers
 import pprint
 from cct_cycle import cct_cycle, location
-from controllers import cycle_cct, light_off, light_on, dim
+from controllers import cycle_cct, light_off, light_on, dim, randomize
 from twilight import twilight
 
 """ IDEAs
@@ -162,9 +162,10 @@ twilight_off = lambda: randomize(10, keuken_off, terras_off, overloop_off, woonk
 is_twilight = twilight(entree_lightlevel, on_dawn=twilight_off, on_dusk=twilight_on, threshold=4000) 
 
 
+
 async def main():
     timers.at_time_do(datetime.time( 7,00), lambda: twilight_on() if is_twilight() else None)
-    timers.at_time_do(datetime.time(23,00), twilight_off) # TODO randomize
+    timers.at_time_do(datetime.time(23,00), twilight_off)
     await my_bridge.dispatch_events()
     
 

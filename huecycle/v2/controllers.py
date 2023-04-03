@@ -349,19 +349,23 @@ async def timer_checks_args():
 
 
 def randomize(dt_min, *fns):
-    loop = asyncio.get_running_loop()
+    call_later = asyncio.get_running_loop().call_later
+    uniform = random.uniform
+    dt_s = dt_min * 60
     for fn in fns:
-        delay = random.uniform(0, dt_min * 60)
-        loop.call_later(delay, fn)
+        delay = uniform(0, dt_s)
+        call_later(delay, fn)
     
 
 @test(timeout=10)
 async def randomize_test():
     times = []
+    monotonic = time.monotonic
+    append = times.append
     def a():
-        times.append(time.monotonic() - t0)
+        append(monotonic() - t0)
     t0 = time.monotonic()
-    # 100 times in 0.1 s => 1 ms per iteration
+    # 100 times in 0.1 s => 1 ms per call
     randomize(0.1/60, *((a,)*100))
     await asyncio.sleep(0.1)
     test.eq(100, len(times))

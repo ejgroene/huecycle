@@ -45,9 +45,13 @@ def controller(control):
 @test.fixture
 def mockservice(t='light'):
     class service(prototype):
+        on = {'on': False}
+        color = {'xy': {'x': 0, 'y': 0}}
+        dimming = {'brightness': 1}
         type = t
         v = []
         def put(self, v):
+            self.update(v.items())
             self.v.append(v)
     yield service
 
@@ -70,7 +74,7 @@ def simple_controller_removes_task(mockservice):
     mockservice.controller = mocktask
     @controller
     def do_something(light, x=8):
-        light.put('ON') 
+        light.put({'ON': 'on'}) 
     do_something(mockservice, 5)
     test.not_(mockservice.controller)
 
@@ -79,7 +83,7 @@ def simple_controller_removes_task(mockservice):
 async def simple_controller_does_NOT_remove_running_task(mockservice):
     @controller
     def do_something(light, x=8):
-        light.put('ON') 
+        light.put({'ON': 'on'}) 
     @controller
     async def do_something_repeatedly(light):
         for i in range(3):
@@ -88,7 +92,7 @@ async def simple_controller_does_NOT_remove_running_task(mockservice):
 
     do_something_repeatedly(mockservice)
     await asyncio.sleep(0.01)
-    test.eq(['ON', 'ON', 'ON'], mockservice.v)
+    test.eq([{'ON': 'on'}, {'ON': 'on'}, {'ON': 'on'}], mockservice.v)
     test.eq('do_something_repeatedly', mockservice.controller.get_coro().__name__)
 
 
@@ -171,63 +175,70 @@ def dim_test(mockservice):
 
 @controller
 def light_on(light, ct=3000, brightness=100):
- 
-    # if the lamp supports colors, we use extended_cct
-    if light.color:
+    """ Turn on light with as few Zigbee messages as possible,
+        each key is a separate Zigbee message. """
+    msg = {} 
+    if not light.on.on:
+        msg['on'] = {'on': True}
+    if color := light.color:
         x, y = ct_to_xy(ct)
-        light.put({
-            'on': {'on': True},                       # TODO avoid unnecessary on
-            'color': {'xy': {'x': x, 'y': y}},
-            'dimming': {'brightness': brightness}
-        })
-
-    # lamp only supports color_temperature with a range
-    elif light.color_temperature:
-        schema = light['color_temperature']['mirek_schema']
+        if (color.xy.x, color.xy.y) != (x, y):
+            msg['color'] = {'xy': {'x': x, 'y': y}}
+    elif color_temp := light.color_temperature:
+        schema = color_temp['mirek_schema']
         mirek_max = schema['mirek_maximum']
         mirek_min = schema['mirek_minimum']
         mirek = min(mirek_max, max(mirek_min, MIREK//ct))
-        light.put({
-            'on': {'on': True},                       # TODO avoid unnecessary on
-            'color_temperature': {'mirek': mirek},
-            'dimming': {'brightness': brightness}
-        })
-
-    # dim only lamp #TODO test
-    else:
-        light.put({
-            'on': {'on': True},                       # TODO avoid unnecessary on
-            'dimming': {'brightness': brightness}
-        })
-
-
+        if mirek != color_temp['mirek']:
+            msg['color_temperature'] = {'mirek': mirek}
+    if dimming := light.dimming:
+        if dimming.brightness != brightness:
+            msg['dimming'] = {'brightness': brightness}
+    light.put(msg)
+        
 
 @test
 def light_on_test(mockservice:'light'):
-    mockservice.color = {'xy': {'x': 0.5, 'y': 0.5}}
+    mirek_schema = {
+        "mirek_schema": {
+					"mirek_minimum": 153,
+					"mirek_maximum": 454,
+				}
+        }
     light_on(mockservice)
     test.eq({'on': {'on': True},
              'color': {'xy': {'x': 0.4366, 'y': 0.4042}},
              'dimming': {'brightness': 100}},
          mockservice.v[0])
     light_on(mockservice, ct=2000, brightness=50)
-    test.eq({'on': {'on': True},
-             'color': {'xy': {'x': 0.5269, 'y': 0.4133}},
+    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}},
              'dimming': {'brightness': 50}},
          mockservice.v[1])
     del mockservice.color
-    mockservice.color_temperature = {
-        "mirek_schema": {
-					"mirek_minimum": 153,
-					"mirek_maximum": 454,
-				}
-        }
+    mockservice.color_temperature = mirek_schema
     light_on(mockservice, ct=10000, brightness=42)
-    test.eq({'on': True}, mockservice.v[2]['on'])
+    test.not_('on' in mockservice.v[2])
     test.eq({'brightness': 42}, mockservice.v[2]['dimming'])
     test.eq({'mirek': 153}, mockservice.v[2]['color_temperature'])
+    mockservice.color_temperature = mirek_schema
     light_on(mockservice, ct=1000)
     test.eq({'mirek': 454}, mockservice.v[3]['color_temperature'])
+
+
+@test
+def light_on_limits_zigbee_traffic(mockservice:'light'):
+    """ each key/value in a PUT results in a separate Zigbee message, avoid as much as possible """
+    light_on(mockservice)
+    test.eq({'on': {'on': True}, 'color': {'xy': {'x': 0.4366, 'y': 0.4042}}, 'dimming': {'brightness': 100}},
+             mockservice.v[0])
+    light_on(mockservice, brightness=90)
+    test.eq({'dimming': {'brightness': 90}}, mockservice.v[1])
+    light_on(mockservice, brightness=90, ct=2000)
+    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}}}, mockservice.v[2])
+    mockservice.on = {'on': False}
+    light_on(mockservice, brightness=90, ct=2000)
+    test.eq({'on': {'on': True}}, mockservice.v[3])
+
     
 
 @controller
@@ -283,7 +294,6 @@ def mockcycle():
 
 @test
 async def cct_controller(mockservice, mockcycle):
-    mockservice.color = {'mock': 'iets'}
     cycle_cct(mockservice, mockcycle, t=0.01)
     await asyncio.sleep(0)
     test.eq(1, len(mockservice.v))
@@ -295,12 +305,12 @@ async def cct_controller(mockservice, mockcycle):
 
     await asyncio.sleep(0.01)
     test.eq(2, len(mockservice.v))
-    test.eq({'on': {'on': True}, 'color': {'xy': {'x': 0.4297, 'y': 0.4017}}, 'dimming': {'brightness': 60}}, mockservice.v[1])
+    test.eq({'color': {'xy': {'x': 0.4297, 'y': 0.4017}}, 'dimming': {'brightness': 60}}, mockservice.v[1])
     test.eq(False, mockservice.controller.done())
+
 
 @test
 async def cct_cycle_with_group(mockservice:'grouped_light', mockcycle):
-    mockservice.color = {'mock': 'iets'}
     cycle_cct(mockservice, mockcycle, t=0.01)
     # en?
 

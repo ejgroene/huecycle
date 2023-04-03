@@ -10,6 +10,28 @@ from extended_cct import ct_to_xy, MIREK
 import autotest
 test = autotest.get_tester(__name__)
 
+""" A controller is a Python function that controls a light using PUT messages.
+    It may be async, in which case it is run as a background task. Otherwise,
+    the function is simply called once.
+
+    Activation of a new controller cancels the previous one automatically. One
+    caveat: one controller may be running for a single light, and another
+    controller may be running for a group the light is in.
+    These might interfere, as setting a controller for a group does not cancel the
+    one for the single light or vice versa.
+
+    A controller must accept a service (light of grouped_light) as the first argument.
+    Other argumenst are free to use for other purposes.
+
+    A contoller is activated by simply calling it. For example:
+
+    light_on(my_light, ct=3000)
+    cycle_cct(my_light, my_circadian_cycle)
+    dim(my_light, delta=-20)
+
+    You define your own contoller using @controller for the function definition. Below
+    are some predefined controller for frequently used functions.
+"""
 
 __all__ = ['controller', 'light_on', 'light_off', 'dim', 'scene_on', 'cycle_cct']
 
@@ -417,10 +439,11 @@ async def timer_checks_args():
         timer(t, f) 
 
 
-def randomize(dt_min, *fns):
+def randomize(dt, *fns):
+    assert isinstance(dt, timedelta)
     call_later = asyncio.get_running_loop().call_later
     uniform = random.uniform
-    dt_s = dt_min * 60
+    dt_s = dt.total_seconds()
     for fn in fns:
         delay = uniform(0, dt_s)
         call_later(delay, fn)
@@ -428,14 +451,15 @@ def randomize(dt_min, *fns):
 
 @test(timeout=10)
 async def randomize_test():
+    dt_100ms = timedelta(milliseconds=100)
     times = []
     monotonic = time.monotonic
     append = times.append
+    t0 = monotonic()
     def a():
         append(monotonic() - t0)
-    t0 = time.monotonic()
-    # 100 times in 0.1 s => 1 ms per call
-    randomize(0.1/60, *((a,)*100))
+    # 100 times in 100 ms => 1 ms per call
+    randomize(dt_100ms , *100*[a])
     await asyncio.sleep(0.1)
     test.eq(100, len(times))
     # perfect stdev should be slighty larger than 0.03

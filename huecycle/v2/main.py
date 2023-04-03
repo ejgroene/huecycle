@@ -5,6 +5,7 @@ import utils
 import tap
 import timers
 import pprint
+from datetime import timedelta
 from cct_cycle import cct_cycle, location
 from controllers import cycle_cct, light_off, light_on, dim, randomize
 from twilight import twilight
@@ -157,8 +158,8 @@ terras_off     = lambda: light_off(terras_lampen)
 
 
 ##### Algemeen (timers) #####
-twilight_on  = lambda: randomize(10, keuken_on,  terras_on,  overloop_on,  woonkamer_on)
-twilight_off = lambda: randomize(10, keuken_off, terras_off, overloop_off, woonkamer_off)
+twilight_on  = lambda: randomize(timedelta(minutes=10), keuken_on,  terras_on,  overloop_on,  woonkamer_on)
+twilight_off = lambda: randomize(timedelta(minutes=10), keuken_off, terras_off, overloop_off, woonkamer_off)
 is_twilight = twilight(entree_lightlevel, on_dawn=twilight_off, on_dusk=twilight_on, threshold=4000) 
 
 

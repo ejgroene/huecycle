@@ -11,34 +11,44 @@ import autotest
 test = autotest.get_tester(__name__)
 
 
+__all__ = ['controller', 'light_on', 'light_off', 'dim', 'scene_on', 'cycle_cct']
+
+
 def controller(control):
-    """ decorator for marking a function as Hue controller
-        'control' must must be a function accepting a Hue service
-        object as its first argument. It may be async.
+    """ Decorator for marking a function as Hue controller.
+        'control' must must be a function accepting a Hue service object as its first argument.
     """
+
+    # if control is a coroutine, schedule a task and attach it to the service
     if inspect.iscoroutinefunction(control):
         def control_func(service, *a, **kw):
             assert hasattr(service, 'type'), service
             assert service.type in ('light', 'grouped_light'), service.type
-            """
-                What happens when a async controller sets another async controller?
-                It must terminate and leave the new one running? Kind of continuation?
-                As it is now, the async controller setting a new one gets cancelled while
-                doing it.
-            """
+
+            # first cancel the old controller, if any
             try:
                 service.controller.cancel()
             except AttributeError:
                 pass
+
+            # start new controller and attach it
             service.controller = asyncio.create_task(control(service, *a, **kw), name=control.__name__)
             return service.controller
+
+    # simple control, doing one action
     else:
         def control_func(service, *a, **kw):
+
+            # if an async controller is present...
             if c := service.controller:
+
+                # if it is running, it is issueing this command, so leave it alive
                 if not c.get_coro().cr_running:
                     c.cancel()
                     del service['controller']
+
             return control(service, *a, **kw)
+
     return control_func
 
 
@@ -48,6 +58,7 @@ def mockservice(t='light'):
         on = {'on': False}
         color = {'xy': {'x': 0, 'y': 0}}
         dimming = {'brightness': 1}
+        dimming_delta = {'action': 'down', 'brightness_delta': 20}
         type = t
         v = []
         def put(self, v):
@@ -128,17 +139,113 @@ async def advanced_controller_handling(mockservice):
 
 
 @controller
-def dim(light, brightness=None, delta=None):
+def light_on(light, ct=None, brightness=100):
+    """ Turn on light, with specific color temperature and brightness,
+        with as few Zigbee messages as possible,
+        each key is a separate Zigbee message. Assumes light
+        is updated with latest state (via events)"""
+    msg = {} 
+
+    # if it is not on, turn on
+    if not light.on.on:
+        msg['on'] = {'on': True}
+
+    # if it is a color light, use extended CCT
+    if ct:
+        if color := light.color:
+            x, y = ct_to_xy(ct)
+            # and the color is different
+            if (color.xy.x, color.xy.y) != (x, y):
+                msg['color'] = {'xy': {'x': x, 'y': y}}
+
+        # if it supports color temperature only
+        elif color_temp := light.color_temperature:
+            schema = color_temp['mirek_schema']
+            mirek_max = schema['mirek_maximum']
+            mirek_min = schema['mirek_minimum']
+            mirek = min(mirek_max, max(mirek_min, MIREK//ct))
+            # and the temperature is new
+            if mirek != color_temp['mirek']:
+                msg['color_temperature'] = {'mirek': mirek}
+
+    # any lamp can dim
+    if dimming := light.dimming:
+        # so dim if new value
+        if dimming.brightness != brightness:
+            msg['dimming'] = {'brightness': brightness}
+
+    # if anything, then send it
+    if msg:
+        light.put(msg)
+        
+
+@test
+def light_on_test(mockservice:'light'):
+    mirek_schema = {
+        "mirek_schema": {
+					"mirek_minimum": 153,
+					"mirek_maximum": 454,
+				}
+        }
+    light_on(mockservice)
+    test.eq({'on': {'on': True},
+             'dimming': {'brightness': 100}},
+         mockservice.v[0])
+    light_on(mockservice, ct=2000, brightness=50)
+    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}},
+             'dimming': {'brightness': 50}},
+         mockservice.v[1])
+    del mockservice.color
+    mockservice.color_temperature = mirek_schema
+    light_on(mockservice, ct=10000, brightness=42)
+    test.not_('on' in mockservice.v[2])
+    test.eq({'brightness': 42}, mockservice.v[2]['dimming'])
+    test.eq({'mirek': 153}, mockservice.v[2]['color_temperature'])
+    mockservice.color_temperature = mirek_schema
+    light_on(mockservice, ct=1000)
+    test.eq({'mirek': 454}, mockservice.v[3]['color_temperature'])
+    mockservice.color_temperature['mirek_schema'] = mirek_schema['mirek_schema']
+    test.eq(4, len(mockservice.v))
+    light_on(mockservice, ct=1000) # nothing should happen
+    test.eq(4, len(mockservice.v))
+
+
+@test
+def light_on_limits_zigbee_traffic(mockservice:'light'):
+    """ each key/value in a PUT results in a separate Zigbee message, avoid as much as possible """
+    light_on(mockservice, ct=3000, brightness=100)
+    test.eq({'on': {'on': True}, 'color': {'xy': {'x': 0.4366, 'y': 0.4042}}, 'dimming': {'brightness': 100}},
+             mockservice.v[0])
+    light_on(mockservice, brightness=90)
+    test.eq({'dimming': {'brightness': 90}}, mockservice.v[1])
+    light_on(mockservice, brightness=90, ct=2000)
+    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}}}, mockservice.v[2])
+    mockservice.on = {'on': False}
+    light_on(mockservice, brightness=90, ct=2000)
+    test.eq({'on': {'on': True}}, mockservice.v[3])
+    test.eq(4, len(mockservice.v))
+    light_on(mockservice, brightness=90, ct=2000)
+    test.eq(4, len(mockservice.v))
+    light_on(mockservice, brightness=91, ct=2000)
+    test.eq(5, len(mockservice.v))
+    light_on(mockservice, brightness=91, ct=2001)
+    test.eq(6, len(mockservice.v))
+    
+
+@controller
+def dim(light, brightness=None, delta=None): # TODO reduce Zigbee messages
     assert bool(brightness) ^ bool(delta), "specify either brightness or delta"
     assert brightness is None or 0 < brightness <= 100, brightness
     assert delta is None or -100 < delta < 100, delta
     if light.on.on:
         if brightness:
-            light.put({'dimming': {'brightness': brightness}})
+            light_on(light, brightness=brightness)
         elif delta:
             action = 'down' if delta < 0 else 'up'
             delta = abs(delta)
-            light.put({'dimming_delta': {'action': action, 'brightness_delta': delta}})
+            dimming_delta = light.dimming_delta
+            if dimming_delta.action != action or dimming_delta.brightness_delta != delta:
+                light.put({'dimming_delta': {'action': action, 'brightness_delta': delta}})
 
 
 @test
@@ -173,73 +280,25 @@ def dim_test(mockservice):
     test.eq(3, len(mockservice.v))
 
 
-@controller
-def light_on(light, ct=3000, brightness=100):
-    """ Turn on light with as few Zigbee messages as possible,
-        each key is a separate Zigbee message. """
-    msg = {} 
-    if not light.on.on:
-        msg['on'] = {'on': True}
-    if color := light.color:
-        x, y = ct_to_xy(ct)
-        if (color.xy.x, color.xy.y) != (x, y):
-            msg['color'] = {'xy': {'x': x, 'y': y}}
-    elif color_temp := light.color_temperature:
-        schema = color_temp['mirek_schema']
-        mirek_max = schema['mirek_maximum']
-        mirek_min = schema['mirek_minimum']
-        mirek = min(mirek_max, max(mirek_min, MIREK//ct))
-        if mirek != color_temp['mirek']:
-            msg['color_temperature'] = {'mirek': mirek}
-    if dimming := light.dimming:
-        if dimming.brightness != brightness:
-            msg['dimming'] = {'brightness': brightness}
-    light.put(msg)
-        
-
 @test
-def light_on_test(mockservice:'light'):
-    mirek_schema = {
-        "mirek_schema": {
-					"mirek_minimum": 153,
-					"mirek_maximum": 454,
-				}
-        }
-    light_on(mockservice)
-    test.eq({'on': {'on': True},
-             'color': {'xy': {'x': 0.4366, 'y': 0.4042}},
-             'dimming': {'brightness': 100}},
-         mockservice.v[0])
-    light_on(mockservice, ct=2000, brightness=50)
-    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}},
-             'dimming': {'brightness': 50}},
-         mockservice.v[1])
-    del mockservice.color
-    mockservice.color_temperature = mirek_schema
-    light_on(mockservice, ct=10000, brightness=42)
-    test.not_('on' in mockservice.v[2])
-    test.eq({'brightness': 42}, mockservice.v[2]['dimming'])
-    test.eq({'mirek': 153}, mockservice.v[2]['color_temperature'])
-    mockservice.color_temperature = mirek_schema
-    light_on(mockservice, ct=1000)
-    test.eq({'mirek': 454}, mockservice.v[3]['color_temperature'])
-
-
-@test
-def light_on_limits_zigbee_traffic(mockservice:'light'):
-    """ each key/value in a PUT results in a separate Zigbee message, avoid as much as possible """
-    light_on(mockservice)
-    test.eq({'on': {'on': True}, 'color': {'xy': {'x': 0.4366, 'y': 0.4042}}, 'dimming': {'brightness': 100}},
-             mockservice.v[0])
-    light_on(mockservice, brightness=90)
-    test.eq({'dimming': {'brightness': 90}}, mockservice.v[1])
-    light_on(mockservice, brightness=90, ct=2000)
-    test.eq({'color': {'xy': {'x': 0.5269, 'y': 0.4133}}}, mockservice.v[2])
-    mockservice.on = {'on': False}
-    light_on(mockservice, brightness=90, ct=2000)
-    test.eq({'on': {'on': True}}, mockservice.v[3])
-
+def dim_avoid_messages(mockservice):
+    mockservice.on = {'on': True}
+    dim(mockservice, brightness=40)
+    test.eq({'dimming': {'brightness': 40}}, mockservice.v[0])
+    dim(mockservice, brightness=40)
+    test.eq(1, len(mockservice.v))
+    dim(mockservice, delta=-10)
+    test.eq({'dimming_delta': {'action': 'down', 'brightness_delta': 10}}, mockservice.v[1])
+    dim(mockservice, delta=-10)
+    test.eq(2, len(mockservice.v))
+    dim(mockservice, delta=+10)
+    test.eq({'dimming_delta': {'action': 'up', 'brightness_delta': 10}}, mockservice.v[2])
+    dim(mockservice, delta=+10)
+    test.eq(3, len(mockservice.v))
+    dim(mockservice, delta=+11)
+    test.eq({'dimming_delta': {'action': 'up', 'brightness_delta': 11}}, mockservice.v[3])
     
+
 
 @controller
 def scene_on(scene):

@@ -47,9 +47,11 @@ class bridge(prototype):
 
 
     async def http_put(self, *a, **k):
-        async with self.putlock:        # TODO test
+        # the lock together with the sleep limts the rate
+        async with self.putlock:
             r = await self.http_get('put', *a, **k)
-            await asyncio.sleep(0.025)  # this limits the rate uf puts (Hue limitation)
+            await asyncio.sleep(0.025) 
+            return r
 
 
     def read_objects(self):
@@ -371,3 +373,20 @@ def set_handler():
     test.eq((b, 42), b.event_handler(42))
     with test.raises(TypeError, "set_handler.<locals>.<lambda> must accept two arguments (resource, event)"):
         b.handler(lambda x: None)
+
+
+@test
+async def rate_limiting():
+    requests = []
+    async def request(*_, **__):
+        requests.append(time.monotonic())
+    b = bridge(request=request)
+    b.put({})
+    b.put({})
+    b.put({})
+    b.put({})
+    while len(requests) < 4:
+        await asyncio.sleep(0)
+    test.gt(requests[1] - requests[0], 0.025)
+    test.gt(requests[2] - requests[1], 0.025)
+    test.gt(requests[3] - requests[2], 0.025)

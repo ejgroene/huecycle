@@ -130,7 +130,7 @@ class bridge(prototype):
         async for service, update in self.eventstream():
             if not service:
                 print(f"<unknown>: {dict(update)}", file=sys.stderr)
-                continue # newly added service TODO: reload
+                continue # newly added service TODO: reload (only new, do not ditch all state!)
             if service.event_handler:                 # TODO test condition (new devices added?)
                 print(f"{service.qname!r}: {dict(update)}")
                 service.event_handler(update)
@@ -211,13 +211,16 @@ async def read_objects_duplicate_qname():
 async def calculate_mirek_limits():
     one = {'id': 'one', 'type': 'Aap'}
     two = {'id': 'two', 'type': 'grouped_light', 'color_temperature': {}}
+    tri = {'id': 'tri', 'type': 'grouped_light',
+           'metadata': {'name': 'Mies'}}
     async def request(self, method='', path='', headers=None, **kw):
-        return {'data': [one, two]}
+        return {'data': [one, two, tri]}
     b = bridge(baseurl='base9', username='pietje', request=request)
     b.find_color_temperature_limits = lambda self, resource, index: (42, 84)
     objs = await b.read_objects()
     test.eq(None, objs['one'].color_temperature)
     test.eq({'mirek_schema': {'mirek_minimum': 42, 'mirek_maximum': 84}}, objs['two'].color_temperature)
+    test.eq(None, objs['tri'].color_temperature)
 
 
 @test

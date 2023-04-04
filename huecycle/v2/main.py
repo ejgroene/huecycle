@@ -150,7 +150,7 @@ tap.setup4(my_bridge, 'button:Overloop Tap', overloop_nok,
 
 
 ##### Terras #####
-terras_cycle   = algemeen_cycle()
+terras_cycle   = algemeen_cycle(cct_min=1667)
 terras_lampen  = byname('grouped_light:Terras')
 terras_on      = lambda: cycle_cct(terras_lampen, terras_cycle)
 terras_off     = lambda: light_off(terras_lampen)

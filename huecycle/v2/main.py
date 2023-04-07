@@ -40,8 +40,12 @@ algemeen_cycle = cct_cycle(
           t_sleep  = datetime.time(hour=23))
 
 
+warm_cycle = algemeen_cycle(cct_moon =  2200)
+koud_cycle = algemeen_cycle(cct_moon = 10000)
+
+
 ##### Kantoor #####
-kantoor_cycle = algemeen_cycle()
+kantoor_cycle = koud_cycle()
 
 kantoor_groep      = byname('grouped_light:Kantoor')
 kantoor_motion     = byname('motion:Sensor Kantoor')
@@ -69,11 +73,7 @@ entree_motion      = byname('motion:Sensor Entree')
 entree_groep       = byname('grouped_light:Entree')
 entree_lightlevel  = byname('light_level:Sensor Entree')
 
-entree_cycle = algemeen_cycle(
-          cct_min  = 2200,
-          cct_sun  = 4000,
-          cct_moon = 6500,
-          br_dim   =   50)
+entree_cycle = warm_cycle(br_dim = 40)
 
 @entree_motion.handler
 def handle(motion, event):
@@ -85,7 +85,7 @@ def handle(motion, event):
 
 
 ##### Keuken #####
-keuken_cycle             = algemeen_cycle(br_max=60)
+keuken_cycle             = warm_cycle(br_min=10, br_max=60)
 keuken_aanrecht          = byname('light:Keuken Aanrecht')
 keuken_schemer           = byname('light:Keuken Schemerlamp')
 keuken_scene_II          = byname('scene:room:Keuken:Tap:II')
@@ -116,7 +116,7 @@ tap.setup4(my_bridge, 'button:Aanrecht Dimmer', keuken_aanrecht,
 
 
 ##### Woonkamer #####
-woonkamer_cycle    = algemeen_cycle()
+woonkamer_cycle    = warm_cycle()
 #woonkamer_groep    = byname('grouped_light:Woonkamer')
 woonkamer_nis      = byname('light:Woonkamer Nis')
 woonkamer_on       = lambda: cycle_cct(woonkamer_nis, woonkamer_cycle)
@@ -129,13 +129,13 @@ badkamer_groep     = byname('grouped_light:Badkamer')
 badkamer_scene_II  = byname('scene:room:Badkamer:Tap:II')
 badkamer_scene_III = byname('scene:room:Badkamer:Tap:III')
 badkamer_scene_IV  = byname('scene:room:Badkamer:Tap:IV')
-badkamer_cycle     = algemeen_cycle()
+badkamer_cycle     = warm_cycle()
 tap.setup2(my_bridge, 'button:Badkamer Tap', badkamer_groep, badkamer_cycle, badkamer_scene_II, badkamer_scene_III, badkamer_scene_IV)
 
 
 
 ##### Overloop #####
-overloop_cycle  = algemeen_cycle(br_dim=1, cct_min=1667)
+overloop_cycle  = warm_cycle(br_dim=1, cct_min=1667)
 overloop_nok    = byname('light:Overloop Nok')
 overloop_on     = lambda: cycle_cct(overloop_nok, overloop_cycle)
 overloop_off    = lambda: light_off(overloop_nok)
@@ -150,7 +150,7 @@ tap.setup4(my_bridge, 'button:Overloop Tap', overloop_nok,
 
 
 ##### Terras #####
-terras_cycle   = algemeen_cycle(cct_min=1667)
+terras_cycle   = warm_cycle(cct_min=1667)
 terras_lampen  = byname('grouped_light:Terras')
 terras_on      = lambda: cycle_cct(terras_lampen, terras_cycle)
 terras_off     = lambda: light_off(terras_lampen)

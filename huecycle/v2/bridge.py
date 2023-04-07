@@ -5,6 +5,7 @@ import time
 import inspect
 import asyncio
 import traceback
+import contextlib
 
 from functools import partialmethod
 from prototype3 import prototype
@@ -18,6 +19,7 @@ import autotest
 test = autotest.get_tester(__name__)
 
 
+
 class bridge(prototype):
 
     apiv2 = property("{baseurl}/clip/v2".format_map)
@@ -25,7 +27,6 @@ class bridge(prototype):
     headers = property(lambda self: {'hue-application-key': self.username})
     wait_time = 1
     find_color_temperature_limits = lambda self, *a: utils.find_color_temperature_limits(*a)
-    putlock = asyncio.Lock()
 
 
     async def request(self, *a, **kw): # intended for mocking
@@ -55,6 +56,7 @@ class bridge(prototype):
 
 
     def read_objects(self):
+        self.putlock = asyncio.Lock()
         self.index = index = {}
         self._byname = byname = {}
         async def task():
@@ -66,7 +68,7 @@ class bridge(prototype):
                 if qname := utils.get_qname(resource, index):
                     resource['qname'] = qname
                     if resource['type'] == 'grouped_light':
-                        if resource.color_temperature is not None:  # TODO test condition (dim only lamp)
+                        if resource.color_temperature is not None:
                             mirek_min, mirek_max = self.find_color_temperature_limits(resource, index)
                             resource.color_temperature = { 'mirek_schema':
                                              {'mirek_minimum': mirek_min, 'mirek_maximum': mirek_max}}
@@ -251,7 +253,10 @@ async def write_object():
 async def put_fails():
     def request(*_, **__):
         raise ValueError('a message')
-    b = bridge(baseurl='b7', username='jo', request=request)
+    @contextlib.asynccontextmanager
+    async def noop():
+        yield
+    b = bridge(baseurl='b7', username='jo', request=request, putlock=noop())
     with test.stderr as e:
         b.put({1:2})
         await asyncio.sleep(0)
@@ -383,7 +388,7 @@ async def rate_limiting():
     requests = []
     async def request(*_, **__):
         requests.append(time.monotonic())
-    b = bridge(request=request)
+    b = bridge(request=request, putlock=asyncio.Lock())
     b.put({})
     b.put({})
     b.put({})

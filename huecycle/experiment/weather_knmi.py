@@ -57,18 +57,22 @@ ww_curr_10:
     WMO table 4680: https://met.nps.edu/~bcreasey/mr3222/files/helpful/DecodeLandSynopticCode.pdf
 """
 
+
 def get_edr():
     api = "https://api.dataplatform.knmi.nl/edr"
     timestamp = (datetime.utcnow() - quarter).strftime("%Y-%m-%dT%H:%M:00Z/..")
-    r = requests.get(api+'/collections/observations/locations/06275', params={
-            'datetime': timestamp,
-            'parameter-name': 'q_glob_10,t_dryb_10,ww_cor_10,ww_curr_10',
+    r = requests.get(
+        api + "/collections/observations/locations/06275",
+        params={
+            "datetime": timestamp,
+            "parameter-name": "q_glob_10,t_dryb_10,ww_cor_10,ww_curr_10",
         },
-        headers={'Authorization': f"{my_key}"})
+        headers={"Authorization": f"{my_key}"},
+    )
     response = r.json()
-    #pprint.pprint(response)
-    ranges = response['ranges']
-    return {k: ranges[k]['values'][0] for k in ranges}
+    # pprint.pprint(response)
+    ranges = response["ranges"]
+    return {k: ranges[k]["values"][0] for k in ranges}
 
 
 """ van W/m² naar color temperatuur of witbalans:

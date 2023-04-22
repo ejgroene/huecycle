@@ -109,22 +109,6 @@ def print_rule(rule):
         print("    {method} {body} on {address}".format(**a))
 
 
-# w = walk({
-#    '__key__': lambda a, s, p, os: s['type'],
-#    #'__switch__': lambda p, os: os['owner'],
-#    'button': {
-#       'last_event': {
-#            'initial_press': lambda a, s, p, os: l1.put({'on': {'on': True}}), #prev == 'short_release' and evebt.t-prev.t < 0}})
-#            'short_release': ignore_silently,
-#            'long_press': ignore_silently,
-#            'repeat': ignore_silently,
-#            'long_release': ignore_silently,
-#       },
-#    },
-#    '*': lambda a, *_: a,
-# })
-
-
 def color_profile_bulb():
     tolemeo = byname["light:Artemide"]
     for T in range(153, 500 + 1):
@@ -143,9 +127,8 @@ def find_color_temperature_limits(group, index):
         child = index[child_ref["rid"]]
         for light_ref in (r for r in child["services"] if r["rtype"] == "light"):
             light = index[light_ref["rid"]]
-            if schema := light.get("color_temperature", {}).get(
-                "mirek_schema"
-            ):  # TODO test condition
+            schema = light.get("color_temperature", {}).get("mirek_schema")
+            if schema:
                 mirek_min = schema["mirek_minimum"]
                 mirek_max = schema["mirek_maximum"]
                 found_min = max(found_min, mirek_min)
@@ -204,10 +187,18 @@ def find_color_temperature_limits_test():
         },
         "type": "light",
     }
+    light2 = {
+        "id": "20f9eXXX-b120-4dfd-98f8-760ecab5fc4a",
+        "color_temperature": {
+            "mirek_valid": True,
+        },
+        "type": "light",
+    }
     index = {}
     index[owner["id"]] = owner
     index[devic0["id"]] = devic0
     index[devic1["id"]] = devic1
     index[light0["id"]] = light0
     index[light1["id"]] = light1
+    index[light2["id"]] = light2
     test.eq((166, 454), find_color_temperature_limits(group, index))

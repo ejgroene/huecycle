@@ -45,8 +45,8 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
             if lock == "dusk":
                 return
             lock = None
-            # level below threshold, or 0 (happens, then no more events follow!) #TODO test
-            if avg < threshold or level == 0: 
+            # level below threshold, or 0 (happens, then no more events follow)
+            if avg < threshold or level == 0:
                 print("DUSK:", avg)
                 on_dusk()
                 lock = "dusk"
@@ -171,6 +171,7 @@ def twilight_event_handling():
     test.eq(["dawn", "dusk"], calls)
     test.eq(False, is_twilight())
 
+
 @test
 def no_more_events_when_0():
     calls = []
@@ -188,10 +189,8 @@ def no_more_events_when_0():
     sensor.event_handler(ll_event(10000))
     sensor.event_handler(ll_event(10000))
     sensor.event_handler(ll_event(10000))
-    sensor.event_handler(ll_event(10000)) # goes down fast
-    sensor.event_handler(ll_event( 5000)) # average does no come below threshold
-    sensor.event_handler(ll_event(  500)) # and...
-    sensor.event_handler(ll_event(    0)) # no more events until next light!
+    sensor.event_handler(ll_event(10000))  # goes down fast
+    sensor.event_handler(ll_event(5000))  # average does no come below threshold
+    sensor.event_handler(ll_event(500))  # and...
+    sensor.event_handler(ll_event(0))  # no more events until next light!
     test.eq(["dusk"], calls)
-
-

@@ -9,7 +9,7 @@ test = autotest.get_tester(__name__)
 
 
 # a reasonable window size from experiments with log data
-W = 10
+W = 3
 noon = datetime_py.time(13, 00)
 
 
@@ -28,6 +28,7 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
             return
 
         avg = round(statistics.mean(window))
+        print("AVG LIGHT LEVEL:", avg, lock)
 
         # it is dawn
         if dt.datetime.now().time() < noon:
@@ -44,7 +45,8 @@ def twilight(sensor, on_dawn, on_dusk, threshold=1000, window_size=W, dt=datetim
             if lock == "dusk":
                 return
             lock = None
-            if avg < threshold:
+            # level below threshold, or 0 (happens, then no more events follow!) #TODO test
+            if avg < threshold or level == 0: 
                 print("DUSK:", avg)
                 on_dusk()
                 lock = "dusk"
@@ -168,3 +170,28 @@ def twilight_event_handling():
     sensor.event_handler(ll_event(50))
     test.eq(["dawn", "dusk"], calls)
     test.eq(False, is_twilight())
+
+@test
+def no_more_events_when_0():
+    calls = []
+
+    def on_dawn():
+        calls.append("dawn")
+
+    def on_dusk():
+        calls.append("dusk")
+
+    dt_mock = datetime_mock(_now=(2020, 3, 31, 18, 30))
+    is_twilight = twilight(
+        sensor, on_dawn, on_dusk, threshold=4000, window_size=5, dt=dt_mock
+    )
+    sensor.event_handler(ll_event(10000))
+    sensor.event_handler(ll_event(10000))
+    sensor.event_handler(ll_event(10000))
+    sensor.event_handler(ll_event(10000)) # goes down fast
+    sensor.event_handler(ll_event( 5000)) # average does no come below threshold
+    sensor.event_handler(ll_event(  500)) # and...
+    sensor.event_handler(ll_event(    0)) # no more events until next light!
+    test.eq(["dusk"], calls)
+
+

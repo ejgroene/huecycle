@@ -22,6 +22,17 @@ test = autotest.get_tester(__name__)
 
 
 class bridge(prototype):
+    """
+    Base object for representing one Hue bridge v2.
+
+    It needs:
+     * baseurl: the url of your bridge
+     * username: username (key) for the bridge
+
+    Call read_objects() once to sync all resources from the bridge.
+    Call dispatch_events() to start processing events.
+    """
+
     apiv2 = property("{baseurl}/clip/v2".format_map)
     apiv1 = property("{baseurl}/api/{username}".format_map)
     headers = property(lambda self: {"hue-application-key": self.username})

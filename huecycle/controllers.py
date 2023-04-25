@@ -270,7 +270,7 @@ def light_on_limits_zigbee_traffic(mockservice: "light"):
 
 
 @controller
-def dim(light, brightness=None, delta=None):  # TODO reduce Zigbee messages
+def dim(light, brightness=None, delta=None):
     assert bool(brightness) ^ bool(delta), "specify either brightness or delta"
     assert brightness is None or 0 < brightness <= 100, brightness
     assert delta is None or -100 < delta < 100, delta

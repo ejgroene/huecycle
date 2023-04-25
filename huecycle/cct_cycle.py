@@ -56,7 +56,8 @@ class Cct_cycle(prototype):
 
         # 1. brightness increases sinusoidal between wakeup and noon (rather quick)
         if t_wake < t_now <= t_noon:
-            b = 1 / 2 * self.phase(t_wake, t_now, t_noon)
+            x = 1 / 2 * self.phase(t_wake, t_now, t_noon)
+            b = pi / 2 * sin(x)
 
         # 2. brightness decreases sinusoidal from noon to bedtime (rather slow)
         elif t_noon < t_now < t_sleep:
@@ -144,10 +145,10 @@ def create_cycle():
             (4471, 2),
             (3254, 2),  # night
             (2500, 2),
-            (2655, 34),
-            (3471, 62),
-            (4605, 84),
-            (5710, 97),
+            (2655, 50), #34), sin vs sin^2
+            (3471, 83), #62),
+            (4605, 96), #84),
+            (5710, 99), #97),
             (5930, 99),  # morning
             (5032, 97),
             (3837, 92),
@@ -176,11 +177,11 @@ def create_cycle():
             (2717, 2),
             (3072, 2),
             (3502, 2),
-            (4006, 29),
-            (4566, 53),
-            (5135, 74),
-            (5629, 89),
-            (5940, 97),
+            (4006, 43), #29), sin vs sin^2
+            (4566, 74), #53),
+            (5135, 91), #74),
+            (5629, 98), #89),
+            (5940, 99), #97),
             (5981, 99),
             (5741, 96),
             (5288, 90),
@@ -222,7 +223,7 @@ def create_cycle():
     # in winter, lowest CTT should be between wake and rise
     test.eq((2500, 2), c.cct_brightness(datetime(2023, 12, 21, hour=8, tzinfo=ams)))
     test.eq(
-        (2500, 25),
+        (2500, 37),
         c.cct_brightness(datetime(2023, 12, 21, hour=8, minute=42, tzinfo=ams)),
     )
     # and set and sleep

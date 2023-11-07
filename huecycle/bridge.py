@@ -159,6 +159,7 @@ class bridge(prototype):
                 continue  # newly added service TODO: reload (only new, do not ditch all state!)
             if service.event_handler:  # TODO test condition (new devices added?)
                 print(f"{service.qname!r}: {dict(update)}")
+                # update was None once (see trace in tap.py)
                 service.event_handler(update)
             else:
                 """update internal state to reflect changes"""

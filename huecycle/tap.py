@@ -58,6 +58,18 @@ def setup4(bridge, name, light, *actions):
 
     def make_handler(off, on):
         def handler(service, event):
+            """ event once was None #TODO
+Traceback (most recent call last):
+  File "/Users/admin/dev/huecycle/huecycle/main.py", line 198, in main
+    await my_bridge.dispatch_events()
+  File "/Users/admin/dev/huecycle/huecycle/bridge.py", line 162, in dispatch_events
+    service.event_handler(update)
+  File "/Users/admin/dev/huecycle/huecycle/tap.py", line 61, in handler
+    if event.button_report.event == "initial_press":
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'event'
+"""
+
             if event.button_report.event == "initial_press":
                 action = on if light.on.on else off
                 action()

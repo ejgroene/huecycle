@@ -128,10 +128,9 @@ tap.setup4(
 
 ##### Woonkamer #####
 woonkamer_cycle = warm_cycle(br_max=70)
-# woonkamer_groep    = byname('grouped_light:Woonkamer')
-woonkamer_nis = byname("light:Woonkamer Nis")
-woonkamer_on = lambda: cycle_cct(woonkamer_nis, woonkamer_cycle)
-woonkamer_off = lambda: light_off(woonkamer_nis)
+woonkamer_groep = byname('grouped_light:Woonkamer')
+woonkamer_on = lambda: cycle_cct(woonkamer_groep, woonkamer_cycle)
+woonkamer_off = lambda: light_off(woonkamer_groep)
 
 
 ##### Badkamer #####
@@ -169,22 +168,16 @@ tap.setup4(
 )
 
 
-##### Terras #####
-terras_cycle = warm_cycle(cct_min=1667)
-terras_lampen = byname("grouped_light:Terras")
-terras_on = lambda: cycle_cct(terras_lampen, terras_cycle)
-terras_off = lambda: light_off(terras_lampen)
-
 
 ##### Algemeen (timers) #####
 twilight_on = lambda: randomize(
-    timedelta(minutes=10), keuken_on, terras_on, overloop_on, woonkamer_on
+    timedelta(minutes=10), keuken_on, overloop_on, woonkamer_on
 )
 twilight_off = lambda: randomize(
-    timedelta(minutes=10), keuken_off, terras_off, overloop_off, woonkamer_off
+    timedelta(minutes=10), keuken_off, overloop_off, woonkamer_off
 )
 is_twilight = twilight(
-    entree_lightlevel, on_dawn=twilight_off, on_dusk=twilight_on, threshold=4000
+    entree_lightlevel, on_dawn=twilight_off, on_dusk=twilight_on, threshold=1000
 )
 
 

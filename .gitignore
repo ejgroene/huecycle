@@ -53,3 +53,7 @@ coverage.xml
 docs/_build/
 
 knmi-pwd
+*.swp
+log.txt
+.DS_Store
+git-access-token

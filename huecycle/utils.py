@@ -11,7 +11,8 @@ def print_overview(bridge):
     def print_series(pre, series, seen, indent):
         for ref in series:
             resource = bridge.index[ref["rid"]]
-            print_one(pre, resource, seen, indent + "  ")
+            if resource: # avoid strange type "taurus_7455"
+                print_one(pre, resource, seen, indent + "  ")
 
     def print_one(pre, resource, seen, indent=""):
         print(f"{indent}{pre}{resource.qname!r}")

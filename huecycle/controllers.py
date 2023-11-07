@@ -50,6 +50,8 @@ def controller(control):
             assert service.type in ("light", "grouped_light"), service.type
 
             # first cancel the old controller, if any
+            # TODO leave this to the new task so it can decide to leave it running
+            #      while it wait for its own action to start (e.g. turn off)
             try:
                 service.controller.cancel()
             except AttributeError:
@@ -485,13 +487,18 @@ async def timer_checks_args():
 
 
 def randomize(dt, *fns):
+    # TODO instead of calling functions at random times, change this to
+    #      setting controllers on a services which all wait a given time
+    #      this helps making consequtive task scheduling easier, avoiding
+    #      lights staying on of off caused by concurrency problems.
     assert isinstance(dt, timedelta)
     call_later = asyncio.get_running_loop().call_later
     uniform = random.uniform
     dt_s = dt.total_seconds()
     for fn in fns:
         delay = uniform(0, dt_s)
-        call_later(delay, fn)
+        call_later(delay, fn) # if you turn the light off before this is executed,
+                              # you must stop the timer; not good...
 
 
 @test(timeout=10)
@@ -523,5 +530,18 @@ def on_motion(sensor, on, off):
 
 
 @test
-def test_motion():
-    pass  # TODO
+def precedence_options():
+    @controller
+    async def override(light):
+        # default: replace current controller
+        pass
+
+    @controller
+    async def later(light):
+        # when current controller ends (when does that happen?)
+        pass
+
+    @controller
+    async def at_time(light):
+        # keep current controller; i'll kill it miself
+        pass

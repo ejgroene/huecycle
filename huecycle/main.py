@@ -103,18 +103,7 @@ keuken_schemer_brighten = lambda: dim(keuken_schemer, delta=+25)
 keuken_on = lambda: [keuken_aanrecht_on(), keuken_schemer_on()]
 keuken_off = lambda: [keuken_aanrecht_off(), keuken_schemer_off()]
 
-# set up tap
-tap.setup2(
-    my_bridge,
-    "button:Keuken Tap",
-    keuken_schemer,
-    keuken_cycle,
-    keuken_scene_II,
-    keuken_scene_III,
-    keuken_scene_IV,
-)
-
-# set up dimmer switch
+# set up dimmer switch aanrecht
 tap.setup4(
     my_bridge,
     "button:Aanrecht Dimmer",
@@ -126,12 +115,30 @@ tap.setup4(
 )
 
 
+#### Keuken/Woonkamer
+
+
 ##### Woonkamer #####
 woonkamer_cycle = warm_cycle(br_max=70)
 woonkamer_groep = byname('grouped_light:Woonkamer')
 woonkamer_on = lambda: cycle_cct(woonkamer_groep, woonkamer_cycle)
 woonkamer_off = lambda: light_off(woonkamer_groep)
+woonkamer_brighten = lambda: dim(woonkamer_groep, delta=+25)
+woonkamer_dim = lambda: dim(woonkamer_groep, delta=-25)
 
+
+# set up tap op de paal
+tap.setup4(
+    my_bridge,
+    "button:Keuken Tap",
+    keuken_schemer,
+    (lambda: [keuken_schemer_on(), woonkamer_on()], lambda: [keuken_schemer_off(), woonkamer_off()]),
+    (utils.noop, lambda: [keuken_schemer_dim(), woonkamer_dim()]),
+    (utils.noop, lambda: [keuken_schemer_on(), woonkamer_on()]),
+    (utils.noop, lambda: [keuken_schemer_brighten(), woonkamer_brighten()]),
+)
+    
+    
 
 ##### Badkamer #####
 badkamer_groep = byname("grouped_light:Badkamer")

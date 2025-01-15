@@ -3,9 +3,9 @@ import asyncio
 
 from prototype3 import prototype
 
-import autotest
+import selftest
 
-test = autotest.get_tester(__name__)
+test = selftest.get_tester(__name__)
 
 
 one_day = datetime.timedelta(days=1)

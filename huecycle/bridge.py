@@ -16,9 +16,9 @@ import logging
 logging.captureWarnings(True)  # get rid of unverified https certificate
 logging.basicConfig(level=logging.ERROR)
 
-import autotest
+import selftest
 
-test = autotest.get_tester(__name__)
+test = selftest.get_tester(__name__)
 
 
 class bridge(prototype):

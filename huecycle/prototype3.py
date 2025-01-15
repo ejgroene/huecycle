@@ -2,9 +2,9 @@ from inspect import isfunction, signature
 from functools import partial
 from collections import ChainMap
 
-import autotest
+import selftest
 
-test = autotest.get_tester(__name__)
+test = selftest.get_tester(__name__)
 
 
 """ Introduces the notion of delegetion or prototyping to Python. The goals are:

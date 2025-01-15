@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from prototype3 import prototype
 from extended_cct import ct_to_xy, MIREK
 
-import autotest
+import selftest
 
-test = autotest.get_tester(__name__)
+test = selftest.get_tester(__name__)
 
 """ A controller is a Python function that controls a light using PUT messages.
     It may be async, in which case it is run as a background task. Otherwise,

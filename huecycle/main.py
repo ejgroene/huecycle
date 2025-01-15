@@ -40,7 +40,7 @@ algemeen_cycle = cct_cycle(
 )
 
 
-warm_cycle = algemeen_cycle(cct_moon=2200)
+warm_cycle = algemeen_cycle(cct_moon=2200, cct_sun=4000)
 koud_cycle = algemeen_cycle(cct_moon=10000)
 
 
@@ -85,7 +85,7 @@ on_motion(
 ##### Keuken #####
 keuken_cycle = warm_cycle(br_min=10, br_max=60)
 keuken_aanrecht = byname("light:Keuken Aanrecht")
-keuken_schemer = byname("light:Keuken Schemerlamp")
+staande_schemer = byname("light:Staande Schemerlamp")
 keuken_scene_II = byname("scene:room:Keuken:Tap:II")
 keuken_scene_III = byname("scene:room:Keuken:Tap:III")
 keuken_scene_IV = byname("scene:room:Keuken:Tap:IV")
@@ -95,13 +95,13 @@ keuken_aanrecht_off = lambda: light_off(keuken_aanrecht)
 keuken_aanrecht_dim = lambda: dim(keuken_aanrecht, delta=-25)
 keuken_aanrecht_brighten = lambda: dim(keuken_aanrecht, delta=+25)
 
-keuken_schemer_on = lambda: cycle_cct(keuken_schemer, keuken_cycle)
-keuken_schemer_off = lambda: light_off(keuken_schemer)
-keuken_schemer_dim = lambda: dim(keuken_schemer, delta=-25)
-keuken_schemer_brighten = lambda: dim(keuken_schemer, delta=+25)
+staande_schemer_on = lambda: cycle_cct(staande_schemer, keuken_cycle)
+staande_schemer_off = lambda: light_off(staande_schemer)
+staande_schemer_dim = lambda: dim(staande_schemer, delta=-25)
+staande_schemer_brighten = lambda: dim(staande_schemer, delta=+25)
 
-keuken_on = lambda: [keuken_aanrecht_on(), keuken_schemer_on()]
-keuken_off = lambda: [keuken_aanrecht_off(), keuken_schemer_off()]
+keuken_on = lambda: [keuken_aanrecht_on(), staande_schemer_on()]
+keuken_off = lambda: [keuken_aanrecht_off(), staande_schemer_off()]
 
 # set up dimmer switch aanrecht
 tap.setup4(
@@ -131,11 +131,11 @@ woonkamer_dim = lambda: dim(woonkamer_groep, delta=-25)
 tap.setup4(
     my_bridge,
     "button:Keuken Tap",
-    keuken_schemer,
-    (lambda: [keuken_schemer_on(), woonkamer_on()], lambda: [keuken_schemer_off(), woonkamer_off()]),
-    (utils.noop, lambda: [keuken_schemer_dim(), woonkamer_dim()]),
-    (utils.noop, lambda: [keuken_schemer_on(), woonkamer_on()]),
-    (utils.noop, lambda: [keuken_schemer_brighten(), woonkamer_brighten()]),
+    staande_schemer,
+    (lambda: [staande_schemer_on(), woonkamer_on()], lambda: [staande_schemer_off(), woonkamer_off()]),
+    (utils.noop, lambda: [staande_schemer_dim(), woonkamer_dim()]),
+    (utils.noop, lambda: [staande_schemer_on(), woonkamer_on()]),
+    (utils.noop, lambda: [staande_schemer_brighten(), woonkamer_brighten()]),
 )
     
     

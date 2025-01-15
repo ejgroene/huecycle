@@ -105,15 +105,20 @@ class bridge(prototype):
             return asyncio.create_task(task())
 
     def byname(self, name):
-        return self._byname.get(name)
+        return self._byname[name]
 
     def put(self, this, data, tail=""):
         """keep put synchronous as to keep using it simple; hence the task
-        no one is interested in the response anyway, we could log errors though TODO
+        no one is interested in the response anyway,
+        if it fails, silently return; either the user must retry or the
+        cycle task next messages will probably work again??
         """
-        return asyncio.create_task(
-            self.http_put(path=f"/resource/{self.type}/{self.id}{tail}", json=data)
-        )
+        try:
+            return asyncio.create_task(
+                self.http_put(path=f"/resource/{self.type}/{self.id}{tail}", json=data)
+            )
+        except asyncio.exceptions.ConnectionResetError:
+            return None
 
     async def eventstream(self):
         while True:

@@ -49,6 +49,7 @@ kantoor_cycle = koud_cycle()
 kantoor_groep = byname("grouped_light:Kantoor")
 kantoor_motion = byname("motion:Sensor Kantoor")
 kantoor_button = byname("button:Kantoor knopje:1")
+kantoor_tap = byname("tap:Kantoor Tap")
 
 
 enable_sensor = lambda: on_motion(
@@ -66,6 +67,16 @@ def handle(button, event):
             light_off(kantoor_groep)
         else:
             cycle_cct(kantoor_groep, kantoor_cycle)
+
+tap.setup2(
+    my_bridge,
+    "button:Kantoor Tap",
+    kantoor_groep,
+    kantoor_cycle,
+    byname("scene:room:Kantoor:Tap:II"),
+    byname("scene:room:Kantoor:Tap:III"),
+    byname("scene:room:Kantoor:Tap:IV"),
+)
 
 
 ##### Entree #####

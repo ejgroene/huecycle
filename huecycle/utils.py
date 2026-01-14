@@ -15,7 +15,7 @@ def print_overview(bridge):
                 print_one(pre, resource, seen, indent + "  ")
 
     def print_one(pre, resource, seen, indent=""):
-        print(f"{indent}{pre}{resource.qname!r}")
+        print(f"{indent}{pre}{resource.qname!r} ({resource.id})")
         if resource.id not in seen:
             seen.add(resource.id)
             indent += "  "

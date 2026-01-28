@@ -8,14 +8,17 @@
 
 import inspect
 import warnings
+import logging
+
 import selftest
 test = selftest.get_tester(__name__)
 
 class Observable:
 
-    def __init__(self):
+    def __init__(self, **message_map):
         self._observers = []
         self._initialized = False
+        self._message_map = message_map
 
     def add_observer(self, observer):
         self._observers.append(observer)
@@ -30,9 +33,15 @@ class Observable:
     def init(self):
         pass
 
-    def send(self, *args, **kwargs):
+    def send(self, msg, **kwargs):
+        if isinstance(msg, dict):
+            type_org = msg.get('type')
+            type_new = self._message_map.get(type_org, type_org)
+            if type_new != type_org:
+                logging.info(f"Mapping type {type_org} to {type_new}")
+                msg = dict(msg, type=type_new)
         for o in self._observers:
-            o.receive(*args, **kwargs)
+            o.receive(msg, **kwargs)
 
     def receive(self, msg, force=None):
         if isinstance(msg, dict):
@@ -103,4 +112,19 @@ def observer_message_dispatch():
         test.eq(2, len(w))
         test.contains(w[0].message.args[0], "does not understand")
         test.contains(w[1].message.args[0], "does not understand")
+
+@test
+def message_map():
+    log = []
+    class O1(Observable):
+        pass
+    class O2(Observable):
+        def g(self, a):
+            log.append(a)
+
+    o1 = O1(f='g')
+    o2 = O2()
+    o1.add_observer(o2)
+    o1.send({'type': 'f', 'a': 42})
+    test.eq([42], log)
 

@@ -72,7 +72,9 @@ def normalized_paths(p):
                  ('color_temperature', 'mirek') | \
                  ('light', 'light_level') | \
                  ('light', 'light_level_report', 'light_level') | \
-                 ('status', 'active'):
+                 ('status', 'active') | \
+                 ('actions',) | \
+                 ('dynamics', 'duration'):
                 yield path, v
 
             case ('dimming', 'brightness'):
@@ -84,14 +86,17 @@ def normalized_paths(p):
 
 class Device(Observable):
 
-    def __init__(self, data, key, put):
+    def __init__(self, data, key, put, **kwargs):
         self._data = data
         self._key = key
         self._put = put
-        # 25 includes the ~20s 'heartbeat' repeating old events
-        self.recent_paths = cachetools.TTLCache(maxsize=10, ttl=25)
+        # TTL: 25 includes the ~20s 'heartbeat' repeating old events
+        # We've also seen events being echoed 60s later....
+        # It doesn't really matter though, as long as we know what we did ourselves,
+        # and it somehow gradually disappears.
+        self.recent_paths = cachetools.TTLCache(maxsize=10, ttl=60)
         self.externally_controlled = set()
-        super().__init__()
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return repr(self._key)

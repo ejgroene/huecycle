@@ -22,6 +22,7 @@ class Bridge:
         self.appkey = {'hue-application-key': username}
         self.index = self.create_index()
         self.configured = {}
+        self.queue = [] # temporary queue for as long as asyncio does not run
 
 
     def create_index(self):
@@ -67,14 +68,17 @@ class Bridge:
 
     def put(self, path, message):
         """ put messages for devices on the queue for sending """
-        self.queue.put_nowait((path, message))
+        if isinstance(self.queue, list):
+            self.queue.append((path, message))
+        else:
+            self.queue.put_nowait((path, message))
 
 
     def device(self, *key, **kwargs):
         """ creates device objects for use in configurations (dna) """
         if device := self.configured.get(key):
             return device
-        device = Device(self.index[key], key, self.put)
+        device = Device(self.index[key], key, self.put, **kwargs)
         self.configured[key] = self.configured[device._data['id']] = device
         return device
 
@@ -95,21 +99,27 @@ class Bridge:
     async def putter(self):
         """ monitor send queue and forward messages to the bridge """
         with logexceptions():
-            async with aiohttp.ClientSession(self._resource+'/', raise_for_status=True, headers=self.appkey) as session:
+            async with aiohttp.ClientSession(self._resource+'/', raise_for_status=False, headers=self.appkey) as session:
                 while True:
                     with logexceptions():
                         path, message = await self.queue.get()
                         logging.info(f"{message} >>> {path}")
                         async with session.put(path, json=message, ssl=False) as response:
-                            await response.json()
+                            r = await response.json()
+                            if response.status >= 400:
+                                raise Exception(r)
                         await asyncio.sleep(0)
 
 
     async def sse(self, callback):
         with logexceptions():
             """ main event loop; processes events from the bridge and dispatches them """
-            self.queue = asyncio.Queue()
             self.tree.init_all()
+            # re-equeue messages sent earlier
+            queue = asyncio.Queue()
+            for m in self.queue:
+                queue.put_nowait(m)
+            self.queue = queue
             asyncio.create_task(self.putter())
             eventstream = self._baseurl + "/eventstream/clip/v2"
             http_args = dict(raise_for_status = True,

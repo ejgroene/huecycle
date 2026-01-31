@@ -78,7 +78,15 @@ class Bridge:
         """ creates device objects for use in configurations (dna) """
         if device := self.configured.get(key):
             return device
-        device = Device(self.index[key], key, self.put, **kwargs)
+        data = self.index[key]
+        device = Device(data, key, self.put, **kwargs)
+        # synthetic scenes are cleared to reduce side effects
+        if data['type'] == 'scene' and data['metadata']['name'] == 'Circadian':
+            logging.info(f"Clearing scene {key}")
+            actions = data['actions']
+            for action in actions:
+                action['action'] = {'on': {'on': True}}
+            device.receive({'actions': actions})
         self.configured[key] = self.configured[device._data['id']] = device
         return device
 
@@ -139,4 +147,3 @@ class Bridge:
                                             callback(update, {event[k] for k in event if k != 'data'})
                                             await asyncio.sleep(0)
        
-

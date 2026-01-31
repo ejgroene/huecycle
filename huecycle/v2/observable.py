@@ -15,10 +15,14 @@ test = selftest.get_tester(__name__)
 
 class Observable:
 
-    def __init__(self, **message_map):
+    def __init__(self, name=None, **message_map):
         self._observers = []
         self._initialized = False
         self._message_map = message_map
+        self._name = name if name else id(self)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}/{self._name}"
 
     def add_observer(self, observer):
         self._observers.append(observer)
@@ -38,7 +42,7 @@ class Observable:
             type_org = msg.get('type')
             type_new = self._message_map.get(type_org, type_org)
             if type_new != type_org:
-                logging.info(f"Mapping type {type_org} to {type_new}")
+                logging.info(f"Mapping type {type_org!r} to {type_new!r}")
                 msg = dict(msg, type=type_new)
         for o in self._observers:
             o.receive(msg, **kwargs)
@@ -49,8 +53,8 @@ class Observable:
                 if method := getattr(self, type, None):
                     if inspect.ismethod(method):  #TODO test
                         return method(**{k:msg[k] for k in msg if k != 'type'})
-        if method := getattr(self, 'unknown', None):
-            return method(msg)  #TODO test
+        #if method := getattr(self, 'unknown', None):
+        #    return method(msg)  #TODO test
         warnings.warn(f"{self} does not understand {msg}")
 
 # TODO test me

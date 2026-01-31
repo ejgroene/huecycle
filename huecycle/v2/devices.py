@@ -8,43 +8,10 @@ import contextlib
 import datetime
 
 from observable import Observable
+from utils import paths, update
 
 import selftest
 test = selftest.get_tester(__name__)
-
-def paths(d):
-    for k, v in d.items():
-        path = k,
-        if isinstance(v, dict):
-            for p, v in paths(v):
-                yield path + p, v
-        else:
-            yield path, v
-
-def update(d, path, value):
-    for p in path[:-1]:
-        d = d.setdefault(p, {})
-    d[path[-1]] = value
-
-@test
-def as_dicts_basisc():
-    d = {}
-    update(d, (1,), 42)
-    test.eq({1: 42}, d)
-    d = {}
-    update(d, (1, 2), 42)
-    test.eq({1: {2: 42}}, d)
-    d = {1: {2: {3:9}, 4:12}, 5:17}
-    update(d, (1, 2, 3), 42)
-    test.eq({1: {2: {3:42}, 4:12}, 5:17}, d)
-
-@test
-def paths_basic():
-    test.eq([], list(paths({})))
-    test.eq([((1,), 2)], list(paths({1: 2})))
-    test.eq([((1,), 2), ((2,), 3)], list(paths({1: 2, 2: 3})))
-    test.eq([((1, 2), 3)], list(paths({1: {2: 3}})))
-    test.eq([((1, 2, 3), 4)], list(paths({1: {2: {3: 4}}})))
 
 def normalized_paths(p):
     for path, v in paths(p):

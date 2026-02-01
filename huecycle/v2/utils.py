@@ -33,6 +33,7 @@ def clamp_basics():
 
 @contextlib.contextmanager
 def logexceptions(exception=Exception):
+    # masks and logs exceptions so as to let loops continue
     try:
         yield
     except KeyboardInterrupt:
@@ -42,6 +43,7 @@ def logexceptions(exception=Exception):
 
 
 def paths(d):
+    # yields all paths + value in an hierarchical dict
     for k, v in d.items():
         path = k,
         if isinstance(v, dict):
@@ -50,15 +52,23 @@ def paths(d):
         else:
             yield path, v
 
+@test
+def paths_basic():
+    test.eq([], list(paths({})))
+    test.eq([((1,), 2)], list(paths({1: 2})))
+    test.eq([((1,), 2), ((2,), 3)], list(paths({1: 2, 2: 3})))
+    test.eq([((1, 2), 3)], list(paths({1: {2: 3}})))
+    test.eq([((1, 2, 3), 4)], list(paths({1: {2: {3: 4}}})))
+
 
 def update(d, path, value):
+    # update a value at a path in an hierarchical dict
     for p in path[:-1]:
         d = d.setdefault(p, {})
     d[path[-1]] = value
 
-
 @test
-def as_dicts_basisc():
+def update_basisc():
     d = {}
     update(d, (1,), 42)
     test.eq({1: 42}, d)
@@ -69,12 +79,4 @@ def as_dicts_basisc():
     update(d, (1, 2, 3), 42)
     test.eq({1: {2: {3:42}, 4:12}, 5:17}, d)
 
-
-@test
-def paths_basic():
-    test.eq([], list(paths({})))
-    test.eq([((1,), 2)], list(paths({1: 2})))
-    test.eq([((1,), 2), ((2,), 3)], list(paths({1: 2, 2: 3})))
-    test.eq([((1, 2), 3)], list(paths({1: {2: 3}})))
-    test.eq([((1, 2, 3), 4)], list(paths({1: {2: {3: 4}}})))
 

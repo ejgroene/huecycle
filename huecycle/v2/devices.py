@@ -69,14 +69,18 @@ class Device(Observable):
         return repr(self._key)
 
     def send(self, message, force=False):
+        # this actually receives messages from the Bridge event loop....
         for path, value in normalized_paths(message):
             if self.recent_paths.get(path, '--boo--') != value:
-                logging.info(f"{self}: External control: {path} = {value}")
+                if path not in self.externally_controlled:
+                    logging.info(f"{self}: External control: {path} = {value}")
                 self.externally_controlled.add(path)
             update(self._data, path, value)
+        # then we forward the message to the observers, for example listeners to sensors
         super().send(message, force=force)
 
     def receive(self, message, force=False):
+        # this actually sends messages to the bridge....
         to_send = {}
         for path, value in normalized_paths(message):
             if path in self.externally_controlled:

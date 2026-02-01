@@ -9,7 +9,9 @@ class Controller(Observable):
         self._queue = asyncio.Queue()
         self._task = asyncio.create_task(self._loop(handler, timeout))
 
-    def dispatch_event(self, **attrs):
+    def dispatch_event(self, delay=None, **attrs):
+        if delay:
+            return asyncio.get_running_loop().call_later(delay, self._queue.put_nowait, attrs)
         self._queue.put_nowait(attrs)
 
     async def _loop(self, handler, timeout):

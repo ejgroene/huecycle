@@ -38,6 +38,7 @@ class Observable:
         pass
 
     def send(self, msg, **kwargs):
+        # events from the bridge and messages from controllers land here
         if isinstance(msg, dict):
             type_org = msg.get('type')
             type_new = self._message_map.get(type_org, type_org)
@@ -53,8 +54,6 @@ class Observable:
                 if method := getattr(self, type, None):
                     if inspect.ismethod(method):  #TODO test
                         return method(**{k:msg[k] for k in msg if k != 'type'})
-        #if method := getattr(self, 'unknown', None):
-        #    return method(msg)  #TODO test
         warnings.warn(f"{self} does not understand {msg}")
 
 # TODO test me

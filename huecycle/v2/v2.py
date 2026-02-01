@@ -28,6 +28,7 @@ class Circadian(Controller):
         self.last_mirek = self.last_bri = self.last_on = None
         self.last_dim = self.last_hue = 1.0
         self.on_by_motion = None
+        self.off_by_motion_task = None
         self.start_event_dispatcher(self.handle_event, timeout=10)
 
     def handle_event(self, on=None, dim=None, hue=None, force=False, extra=()):
@@ -65,6 +66,7 @@ class Circadian(Controller):
 
     def toggle_lights(self, **_):
         # responder for the Tap 1 button
+        self.cancel_motion_control()
         self.dispatch_event(on=not self.last_on)
 
     def dim_lights(self, **_):
@@ -77,6 +79,7 @@ class Circadian(Controller):
 
     def force_on(self, **_):
         # responder for the Tap 3 button
+        self.cancel_motion_control()
         self.dispatch_event(on=True, force=True)
 
     def scene(self, status=None, scene=None):
@@ -92,15 +95,21 @@ class Circadian(Controller):
                 self.taking_control = False
                 self.force_on()
 
+    def cancel_motion_control(self):
+        if self.off_by_motion_task:
+            self.off_by_motion_task.cancel()
+        self.off_by_motion_task = self.on_by_motion = None
+
     def motion(self, motion, **_):
         # responder for the motion sensor
         motion = motion['motion']
         if not self.last_on and motion == True:
+            self.cancel_motion_control()
             self.on_by_motion = True
             self.dispatch_event(on=True)
         elif self.on_by_motion and motion == False:
             self.on_by_motion = False
-            self.dispatch_event(on=False)
+            self.off_by_motion_task = self.dispatch_event(on=False, delay=0)
 
     def on(self, on, **extra):
         # responder for 'on' message from Twilighttimer (thinks we're a light)
@@ -182,11 +191,7 @@ tolomeo_cycle = (Circadian('Tolomeo'),
 events = bridge.configure(
     (device('Kantoor knopje', 1),
         bolt_cycle,
-        tolomeo_cycle,
-    ),
-    (device('Sensor Kantoor', 'motion'),
-        bolt_cycle,
-        tolomeo_cycle,
+        #tolomeo_cycle,
     ),
     (device('Kantoor Tap', 1, button='toggle_lights'),
         bolt_cycle,
@@ -205,6 +210,10 @@ events = bridge.configure(
         tolomeo_cycle,
     ),
     (device('Kantoor', 'Circadian'),
+        bolt_cycle,
+        #tolomeo_cycle,
+    ),
+    (device('Sensor Kantoor', 'motion'),
         bolt_cycle,
         tolomeo_cycle,
     ),

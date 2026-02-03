@@ -46,7 +46,11 @@ def normalized_paths(p):
 
             case ('dimming', 'brightness'):
                 if v != 0.0: # Turning off results in a brightness=0.0 event
-                    yield path, round(v)
+                    yield path, round(v) # we could normalize value to None, because of
+                                     # intermediate dimming levels reported by the bridge
+                                     # so, we consider all dimming events ours, for 60s!
+                                     # that is LONG, because Circadian might update every
+                                     # minute, giving no one else a change
 
             case _:
                 raise Exception((path, v))
@@ -61,7 +65,7 @@ class Device(Observable):
         # We've also seen events being echoed 60s later....
         # It doesn't really matter though, as long as we know what we did ourselves,
         # and it somehow gradually disappears.
-        self.recent_paths = cachetools.TTLCache(maxsize=10, ttl=60)
+        self.recent_paths = cachetools.TTLCache(maxsize=10, ttl=5)
         self.externally_controlled = set()
         super().__init__(**kwargs)
 

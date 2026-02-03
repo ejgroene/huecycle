@@ -109,7 +109,8 @@ class Circadian(Controller):
             self.dispatch_event(on=True)
         elif self.on_by_motion and motion == False:
             self.on_by_motion = False
-            self.off_by_motion_task = self.dispatch_event(on=False, delay=0)
+            self.off_by_motion_task = self.dispatch_event(
+                    on=False, delay=60) #, extra={'dynamics': {'duration': 5000}})
 
     def on(self, on, **extra):
         # responder for 'on' message from Twilighttimer (thinks we're a light)
@@ -147,17 +148,17 @@ class Twilighttimer(Controller):
                     if self.avg_light_level < self.low:
                         # we send only once, leave user in control
                         if self.on != True:
-                            self.send({'type': 'on', 'on': {'on': True}, 'dynamics': {'duration': 5000}})
+                            self.send({'type': 'on', 'on': {'on': True}}) #, 'dynamics': {'duration': 5000}})
                             self.on = True
 
                     elif self.avg_light_level > self.high:
                         if self.on != False:
-                            self.send({'type': 'on', 'on': {'on': False}, 'dynamics': {'duration': 5000}})
+                            self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
                             self.on = False
 
                 elif now > self.bedtime:
                     if self.on != False:
-                        self.send({'type': 'on', 'on': {'on': False}, 'dynamics': {'duration': 5000}})
+                        self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
                         self.on = False
 
                 await sleep(300)
@@ -215,11 +216,16 @@ events = bridge.configure(
     ),
     (device('Sensor Kantoor', 'motion'),
         bolt_cycle,
-        tolomeo_cycle,
+        #tolomeo_cycle,
     ),
     (device('Sensor Kantoor', 'light_level'),
         (Twilighttimer(15000, 20000, t_wake, t_sleep),
             tolomeo_cycle,
+        ),
+    ),
+    (device('Sensor Entree', 'motion'),
+        (Circadian('Entree'),
+            (device('Entree',),),
         ),
     ),
 )

@@ -8,7 +8,7 @@ import contextlib
 import datetime
 
 from observable import Observable
-from utils import paths, update
+from utils import paths, update, logexceptions
 
 import selftest
 test = selftest.get_tester(__name__)
@@ -74,30 +74,35 @@ class Device(Observable):
 
     def send(self, message, force=False):
         # this actually receives messages from the Bridge event loop....
-        for path, value in normalized_paths(message):
-            if self.recent_paths.get(path, '--boo--') != value:
-                if path not in self.externally_controlled:
-                    logging.info(f"{self}: External control: {path} = {value}")
-                self.externally_controlled.add(path)
-            update(self._data, path, value)
-        # then we forward the message to the observers, for example listeners to sensors
-        super().send(message, force=force)
+        with logexceptions():
+            for path, value in normalized_paths(message):
+                if value not in self.recent_paths.get(path, ()):
+                    if path not in self.externally_controlled:
+                        logging.info(f"{self}: External control: {path} = {value}")
+                    self.externally_controlled.add(path)
+                update(self._data, path, value)
+            # then we forward the message to the observers, for example listeners to sensors
+            super().send(message, force=force)
 
     def receive(self, message, force=False):
         # this actually sends messages to the bridge....
         to_send = {}
-        for path, value in normalized_paths(message):
-            if path in self.externally_controlled:
-                if not force:
-                    logging.info(f"{self}: Ignoring {path} = {value}")
-                    continue
-                logging.info(f"{self}: Controlling {path} = {value}")
-                self.externally_controlled.remove(path)
-            self.recent_paths[path] = value
-            update(to_send, path, value)
-        if to_send:
-            type, id = self._data['type'], self._data['id']
-            self._put(f"{type}/{id}", to_send)
+        with logexceptions():
+            for path, value in normalized_paths(message):
+                if path in self.externally_controlled:
+                    if not force:
+                        logging.info(f"{self}: Ignoring {path} = {value}")
+                        continue
+                    logging.info(f"{self}: Controlling {path} = {value}")
+                    self.externally_controlled.remove(path)
+                # we do not overwrite a possible previous path/value but append it, 
+                # to avoid 'external control' for not yet echoot messages
+                values = self.recent_paths.get(path, ())
+                self.recent_paths[path] = *values, value # create or refresh our lease
+                update(to_send, path, value)
+            if to_send:
+                type, id = self._data['type'], self._data['id']
+                self._put(f"{type}/{id}", to_send)
 
 
 @test

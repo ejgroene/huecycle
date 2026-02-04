@@ -39,6 +39,7 @@ class Circadian(Controller):
 
         if on is not None and on != self.last_on or force:
             update(msg, ('on', 'on'), on)
+            self.last_bri = None # force (re)send of brightness to avoid 'external control'
             self.last_on = on
 
         if self.last_on or force:

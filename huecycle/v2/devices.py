@@ -46,6 +46,8 @@ def normalized_paths(p):
 
             case ('dimming', 'brightness'):
                 if v != 0.0: # Turning off results in a brightness=0.0 event
+                             # TODO: Turning ON also results in a brightness=<old value> event,
+                             #       which is easily seen as external control
                     yield path, round(v) # we could normalize value to None, because of
                                      # intermediate dimming levels reported by the bridge
                                      # so, we consider all dimming events ours, for 60s!

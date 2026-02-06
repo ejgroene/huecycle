@@ -29,7 +29,7 @@ class Circadian(Controller):
         self.last_dim = self.last_hue = 1.0
         self.on_by_motion = None
         self.off_by_motion_task = None
-        self.start_event_dispatcher(self.handle_event, timeout=10)
+        self.start_event_dispatcher(self.handle_event, timeout=60)
 
     def handle_event(self, on=None, dim=None, hue=None, force=False, extra=()):
         # handles events from responders below and periodically updates cct and brightness
@@ -39,7 +39,7 @@ class Circadian(Controller):
 
         if on is not None and on != self.last_on or force:
             update(msg, ('on', 'on'), on)
-            self.last_bri = None # force (re)send of brightness to avoid 'external control'
+            self.last_bri = None # soft-force (re)send of brightness to avoid 'external control'
             self.last_on = on
 
         if self.last_on or force:
@@ -47,12 +47,13 @@ class Circadian(Controller):
             bri = clamp(bri * self.last_dim, my_cycle.br_dim, my_cycle.br_max)
             cct = clamp(cct * self.last_hue, my_cycle.cct_min, my_cycle.cct_sun)
             mirek = MIREK // cct
-            if bri != self.last_bri or force:
-                update(msg, ('dimming', 'brightness'), bri)
+            # we send both, because if we only send mirek, we also get an
+            # unsollicited brightness event, which we cannot tell ours (sometimes)
+            if bri != self.last_bri or mirek != self.last_mirek or force:
                 self.last_bri = bri
-            if mirek != self.last_mirek or force:
-                update(msg, ('color_temperature', 'mirek'), mirek)
                 self.last_mirek = mirek
+                update(msg, ('dimming', 'brightness'), bri)
+                update(msg, ('color_temperature', 'mirek'), mirek)
 
         if msg:
             self.send(msg, force=force)
@@ -99,16 +100,16 @@ class Circadian(Controller):
     def cancel_motion_control(self):
         if self.off_by_motion_task:
             self.off_by_motion_task.cancel()
-        self.off_by_motion_task = self.on_by_motion = None
+        self.off_by_motion_task = None
 
     def motion(self, motion, **_):
         # responder for the motion sensor
         motion = motion['motion']
-        if not self.last_on and motion == True:
-            self.cancel_motion_control()
+        self.cancel_motion_control()
+        if motion == True:
             self.on_by_motion = True
             self.dispatch_event(on=True)
-        elif self.on_by_motion and motion == False:
+        elif motion == False and self.on_by_motion:
             self.on_by_motion = False
             self.off_by_motion_task = self.dispatch_event(
                     on=False, delay=60) #, extra={'dynamics': {'duration': 5000}})

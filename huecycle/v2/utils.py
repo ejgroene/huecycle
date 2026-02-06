@@ -80,3 +80,26 @@ def update_basisc():
     test.eq({1: {2: {3:42}, 4:12}, 5:17}, d)
 
 
+class DontCare(int):
+    """ Represents an int, which always compares True, such as to function
+        as a don't care in lists, but still have a serialisable value. """
+    def __new__(cls, value):
+        return super().__new__(cls, value)
+    def __eq__(self, dontcare):
+        return True
+
+@test
+def dont_care_values():
+    d = (1, 2, DontCare(99))
+    test.truth(1 in d)
+    test.truth(2 in d)
+    test.truth(3 in d)
+    test.truth(9 in d)
+
+@test
+def dont_care_json():
+    import json
+    d = (1, 2, DontCare(99))
+    test.eq('[1, 2, 99]', json.dumps(d))
+
+

@@ -1,6 +1,5 @@
 import requests
 import numbers
-import cachetools
 import functools
 import operator
 import logging
@@ -9,6 +8,7 @@ import datetime
 
 from observable import Observable
 from utils import paths, update, logexceptions, DontCare
+from timedict import TimeDict
 
 import selftest
 test = selftest.get_tester(__name__)
@@ -45,11 +45,12 @@ def normalized_paths(p):
                 yield path, v
 
             case ('dimming', 'brightness'):
-                if v != 0.0:                         # Turning off results in a brightness=0.0 event
+                # Turning off results in a brightness=0.0 event, we never send it ourselves
+                if v != 0.0:
+                    # The bridge reports intermediate dimming levels, while we
+                    # sollictated only one. To avoid triggering 'external control'
+                    # we consider all dimming events ours, by means of DontCare
                     yield path, DontCare(round(v)) 
-                                                     # The bridge reports intermediate dimming levels, while we
-                                                     # sollictated only one. To avoid triggering 'external control'
-                                                     # we consider all dimming events ours, by means of DontCare
 
             case _:
                 raise Exception((path, v))
@@ -60,11 +61,7 @@ class Device(Observable):
         self._data = data
         self._key = key
         self._put = put
-        # TTL: 25 includes the ~20s 'heartbeat' repeating old events
-        # We've also seen events being echoed 60s later....
-        # It doesn't really matter though, as long as we know what we did ourselves,
-        # and it somehow gradually disappears.
-        self.recent_paths = cachetools.TTLCache(maxsize=10, ttl=25)
+        self.recent_paths = TimeDict()
         self.externally_controlled = set()
         super().__init__(**kwargs)
 
@@ -87,6 +84,7 @@ class Device(Observable):
         # this actually sends messages to the bridge....
         to_send = {}
         with logexceptions():
+            self.recent_paths.expire()
             for path, value in normalized_paths(message):
                 if path in self.externally_controlled:
                     if not force:
@@ -97,7 +95,10 @@ class Device(Observable):
                 # we do not overwrite a possible previous path/value but append it, 
                 # to avoid 'external control' for not yet echoot messages
                 values = self.recent_paths.get(path, ())
-                self.recent_paths[path] = *values, value # create or refresh our lease
+
+                # NOW use a bigger timeout for hard brightness than for others
+
+                self.recent_paths.add(path, (*values, value), 25000) # create or refresh our lease
                 update(to_send, path, value)
             if to_send:
                 type, id = self._data['type'], self._data['id']

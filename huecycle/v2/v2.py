@@ -2,6 +2,7 @@ import asyncio
 import cct_cycle
 import location
 import datetime
+import statistics
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s  %(message)s')
@@ -28,13 +29,17 @@ class Circadian(Controller):
         self.last_mirek = self.last_bri = self.last_on = None
         self.last_dim = self.last_hue = 1.0
         self.on_by_motion = None
-        self.off_by_motion_task = None
-        self.start_event_dispatcher(self.handle_event, timeout=60)
+        self.off_by_motion_timer = None
+        self.start_message_dispatcher(self.handle_event, timeout_s=60)
 
     def handle_event(self, on=None, dim=None, hue=None, force=False, extra=()):
         # handles events from responders below and periodically updates cct and brightness
-        self.last_dim = (self.last_dim * dim) if dim else 1.0
-        self.last_hue = (self.last_hue * hue) if hue else 1.0
+        if force:
+            self.last_hue = self.last_dim = 1.0
+        if dim:
+            self.last_dim *= dim
+        if hue:
+            self.last_hue *= hue
         msg = dict(extra)
 
         if on is not None and on != self.last_on or force:
@@ -68,21 +73,21 @@ class Circadian(Controller):
 
     def toggle_lights(self, **_):
         # responder for the Tap 1 button
-        self.cancel_motion_control()
-        self.dispatch_event(on=not self.last_on)
+        self.cancel_motion_off()
+        self.dispatch_message(on=not self.last_on)
 
     def dim_lights(self, **_):
         # responder for the Tap 2 button
-        self.dispatch_event(on=True, dim=1/1.25, hue=1/1.25)
+        self.dispatch_message(on=True, dim=1/1.25, hue=1/1.25)
 
     def brighten_lights(self, **_):
         # responder for the Tap 4 button
-        self.dispatch_event(on=True, dim=1.25, hue=1.25)
+        self.dispatch_message(on=True, dim=1.25, hue=1.25)
 
     def force_on(self, **_):
         # responder for the Tap 3 button
-        self.cancel_motion_control()
-        self.dispatch_event(on=True, force=True)
+        self.cancel_motion_off()
+        self.dispatch_message(on=True, force=True)
 
     def scene(self, status=None, scene=None):
         # responder for scene activation via app
@@ -97,26 +102,30 @@ class Circadian(Controller):
                 self.taking_control = False
                 self.force_on()
 
-    def cancel_motion_control(self):
-        if self.off_by_motion_task:
-            self.off_by_motion_task.cancel()
-        self.off_by_motion_task = None
+    def cancel_motion_off(self):
+        if self.off_by_motion_timer:
+            self.off_by_motion_timer.cancel()
+        self.off_by_motion_timer = None
 
     def motion(self, motion, **_):
         # responder for the motion sensor
         motion = motion['motion']
-        self.cancel_motion_control()
         if motion == True:
+            self.cancel_motion_off()
+            if self.last_on:
+                return
             self.on_by_motion = True
-            self.dispatch_event(on=True)
+            self.dispatch_message(on=True)
         elif motion == False and self.on_by_motion:
-            self.on_by_motion = False
-            self.off_by_motion_task = self.dispatch_event(
-                    on=False, delay=60) #, extra={'dynamics': {'duration': 5000}})
+            self.cancel_motion_off()
+            def motion_off():
+                self.dispatch_message(on=False)
+                self.on_by_motion = False
+            self.off_by_motion_timer = asyncio.get_running_loop().call_later(60, motion_off)
 
     def on(self, on, **extra):
         # responder for 'on' message from Twilighttimer (thinks we're a light)
-        self.dispatch_event(on=on['on'], extra=extra)
+        self.dispatch_message(on=on['on'], extra=extra)
 
 
 class Twilighttimer(Controller):
@@ -127,49 +136,44 @@ class Twilighttimer(Controller):
         self.high = high
         self.early = early
         self.bedtime = bedtime
-        self.avg_light_level = (high + low) // 2
-        self.samples = [self.avg_light_level] * 5
-        self.on = None
+        self.samples = []
+        self.on = None  # not on and not off
         super().__init__()
 
     def init(self):
-        self.task = asyncio.create_task(self.loop())
+        self.start_message_dispatcher(self.handle_event, timeout_s=10)
 
-    async def loop(self):
-        while True:
-            with logexceptions():
-                now = datetime.datetime.now().time()
+    def handle_event(self, avg_light_level=None):
+        now = datetime.datetime.now().time()
+        logging.info(f"SCHEMER: {self.early}, {self.bedtime}, {avg_light_level}, {self.on}")
 
-                logging.info(f"SCHEMER: {self.early}, {self.bedtime}, {self.avg_light_level}, {self.on}")
+        if now < self.early:
+            pass
 
-                if now < self.early:
-                    pass
+        elif self.early < now < self.bedtime:
 
-                elif self.early < now < self.bedtime:
+            if avg_light_level and avg_light_level < self.low:
+                # we send only once, leave user in control
+                if self.on != True:
+                    self.send({'type': 'on', 'on': {'on': True}}) #, 'dynamics': {'duration': 5000}})
+                    self.on = True
 
-                    if self.avg_light_level < self.low:
-                        # we send only once, leave user in control
-                        if self.on != True:
-                            self.send({'type': 'on', 'on': {'on': True}}) #, 'dynamics': {'duration': 5000}})
-                            self.on = True
+            elif avg_light_level and avg_light_level > self.high:
+                if self.on != False:
+                    self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
+                    self.on = False
 
-                    elif self.avg_light_level > self.high:
-                        if self.on != False:
-                            self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
-                            self.on = False
+        elif now > self.bedtime:
+            if self.on != False:
+                self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
+                self.on = False
 
-                elif now > self.bedtime:
-                    if self.on != False:
-                        self.send({'type': 'on', 'on': {'on': False}}) #, 'dynamics': {'duration': 5000}})
-                        self.on = False
-
-                await sleep(300)
 
     def light_level(self, light, **kwargs):
         self.samples.append(light['light_level'])
-        self.samples.pop(0)
-        self.avg_light_level = sum(self.samples) // len(self.samples)
-        self.task.cancel()
+        if len(self.samples) > 2:
+            self.dispatch_message(avg_light_level=int(statistics.mean(self.samples)))
+            self.samples.pop(0)
 
 
 
@@ -214,14 +218,14 @@ events = bridge.configure(
     ),
     (device('Kantoor', 'Circadian'),
         bolt_cycle,
-        #tolomeo_cycle,
+        tolomeo_cycle,
     ),
     (device('Sensor Kantoor', 'motion'),
         bolt_cycle,
-        #tolomeo_cycle,
+        tolomeo_cycle,
     ),
     (device('Sensor Kantoor', 'light_level'),
-        (Twilighttimer(15000, 20000, t_wake, t_sleep),
+        (Twilighttimer(20000, 25000, t_wake, t_sleep),
             tolomeo_cycle,
         ),
     ),

@@ -7,7 +7,7 @@ import json
 
 import aiohttp
 
-from devices import Device
+from device import Device
 from observable import Observable, be
 from utils import logexceptions
 

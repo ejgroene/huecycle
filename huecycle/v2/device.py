@@ -75,7 +75,7 @@ class Device(Observable):
                 if value not in self.recent_paths.get(path, ()):
                     if path not in self.externally_controlled:
                         logging.info(f"{self}: External control: {path} = {value}")
-                    self.externally_controlled.add(path)
+                    self.externally_controlled.put(path)
                 update(self._data, path, value)
             # then we forward the message to the observers, for example listeners to sensors
             super().send(message, force=force)
@@ -98,7 +98,7 @@ class Device(Observable):
 
                 # NOW use a bigger timeout for hard brightness than for others
 
-                self.recent_paths.add(path, (*values, value), 25000) # create or refresh our lease
+                self.recent_paths.put(path, (*values, value), 25000) # create or refresh our lease
                 update(to_send, path, value)
             if to_send:
                 type, id = self._data['type'], self._data['id']

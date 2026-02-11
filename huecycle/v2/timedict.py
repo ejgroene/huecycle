@@ -3,12 +3,19 @@ import selftest
 test = selftest.get_tester(__name__)
 
 
+""" A very simple dictionary with expiration time per key.
+    As existing implementations are unmaintained or do not have
+    expiration per key, we roll our own.
+
+    It is dead simple and not efficient. You have to call expire()!
+"""
+
 class TimeDict:
 
     def __init__(self):
         self._d = {}
 
-    def add(self, key, value, time_ms):
+    def put(self, key, value, time_ms):
         now = time.monotonic_ns()
         self._d[key] = (now + 1e6 * time_ms), value
 
@@ -23,9 +30,9 @@ class TimeDict:
 @test
 def timedict_basics():
     d = TimeDict()
-    d.add('key 1', 'value 1', 1) # ms
-    d.add('key 2', 'value 2', 2) # ms
-    d.add('key 3', 'value 3', 3) # ms
+    d.put('key 1', 'value 1', 1) # ms
+    d.put('key 2', 'value 2', 2) # ms
+    d.put('key 3', 'value 3', 3) # ms
     test.eq('value 1', d.get('key 1'))
     test.eq('value 2', d.get('key 2'))
     test.eq('value 3', d.get('key 3'))

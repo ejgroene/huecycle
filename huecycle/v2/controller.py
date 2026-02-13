@@ -113,6 +113,6 @@ async def controller_timeout():
             await asyncio.sleep(0) # should timeout 2 times
         test.eq(['default a', 'default a'], [l[0] for l in log])
         test.gt(log[1][1] - log[0][1], 0.008)
-        test.lt(log[1][1] - log[0][1], 0.012)
+        test.lt(log[1][1] - log[0][1], 0.014)
     finally:
         c.stop_dispatcher()

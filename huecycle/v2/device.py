@@ -193,4 +193,5 @@ def ignore_external_control():
     # send
     # receive
     # ignored
+    pass
 

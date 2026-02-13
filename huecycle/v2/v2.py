@@ -141,7 +141,7 @@ class Twilighttimer(Controller):
         super().__init__()
 
     def init(self):
-        self.start_message_dispatcher(self.handle_event, timeout_s=10)
+        self.start_message_dispatcher(self.handle_event, timeout_s=30)
 
     def handle_event(self, avg_light_level=None):
         now = datetime.datetime.now().time()

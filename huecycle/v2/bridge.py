@@ -134,14 +134,22 @@ class Bridge:
                              timeout = aiohttp.ClientTimeout(total=0, sock_read=0),
                              headers = dict(self.appkey, Accept = "text/event-stream"))
             async with aiohttp.ClientSession(**http_args) as session:
+                last_event_id = (0, 0)
                 while True:
                     with logexceptions():
                         logging.info("Connecting to SSE")
                         async with session.get(eventstream, ssl=False) as response:
                             assert response.headers.get('Content-Type') == 'text/event-stream; charset=utf-8', response.headers
                             async for line in response.content:
-                                if line.startswith(b'data: '):
+                                if line.startswith(b'id: '):
+                                    _, event_id, counter = line.split(b':')
+                                    event_id = int(event_id), int(counter)
+                                elif line.startswith(b'data: '):
                                     container = json.loads(line[6:])
+                                    if not event_id > last_event_id:
+                                        logging.info("SKIPPING EVENT CONTAINER:", container)
+                                        continue
+                                    last_event_id = event_id
                                     for event in container:
                                         for update in event['data']:
                                             callback(update, {event[k] for k in event if k != 'data'})
